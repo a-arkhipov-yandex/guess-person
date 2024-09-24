@@ -46,10 +46,10 @@ class Log:
         if (not logFile):
             logFile = DEFAULT_LOGSTARTFILE
         try:
-            f = open(logFile, 'a')
+            f = open(logFile, 'w+')
             tzinfo=ZoneInfo('Europe/Moscow')
             startTime = dt.now(tzinfo).strftime("%d-%m-%Y %H:%M:%S")
-            f.write(f'{startTime}: NeoOperation_bot started'+"\n")
+            f.write(f'{startTime}: GuessPerson_bot started'+"\n")
         except Exception as error:
             log(f'Cannot open "{logFile}": {error}', LOG_ERROR)
         f.close()
