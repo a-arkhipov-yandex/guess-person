@@ -409,6 +409,7 @@ class GuessPersonBot:
         self.sendMessage(telegramid=telegramid, text=textQuestion)
         media_group = []
         for d in data:
+            log(str=f'{fName}: image url = {d["url"]}',logLevel=LOG_DEBUG)
             media_group.append(types.InputMediaPhoto(show_caption_above_media=True, media=d['url']))
         ret = self.bot.send_media_group(chat_id=telegramid, media=media_group)
         mIds = []

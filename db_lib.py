@@ -1134,16 +1134,26 @@ class Connection:
 
     # Returns 'n' imageIds or None if connection not initialized or issue with DB
     def getRandomImageIdsOfOtherPersons(personId, complexity, n, range = (None, None)):
+        fName = Connection.getRandomImageIdsOfOtherPersons.__name__
         if ((len(range) != 2)):
-            log(f'Wrong range format provided: {range}',LOG_ERROR)
+            log(str=f'{fName}: Wrong range format provided: {range}',logLevel=LOG_ERROR)
             range = (None, None)
+        # Get person gender
+        personInfo = Connection.getPersonInfoById(personId=personId)
+        if (personInfo == None or dbNotFound(result=personInfo)):
+            log(str=f'{fName}: Cannot get person info: {personId}',logLevel=LOG_ERROR)
+            return None
         params = {'p':personId, 'com':complexity, 'n':n}
         query2 = ''
         if ((range[0] != None) and (range[1] != None)):
-            query2 = ' and (i.year > %(start)s and i.year < %(end)s)'
+            query2 = query2 + ' and (i.year > %(start)s and i.year < %(end)s)'
             params['start'] = range[0]
             params['end'] = range[1]
             pass
+        gender = personInfo['gender']
+        if (gender):
+            query2 = query2 + ' and p.gender = %(gen)s'
+            params['gen']=gender
         query = f'''
             SELECT i.id FROM images as i join persons as p on i.person=p.id
             where i.person!=%(p)s and (p.complexity<=%(com)s or p.complexity is null)
