@@ -120,10 +120,24 @@ def dbLibCheckIfGameFinished(gameInfo:dict) -> bool:
         return True
     return False
 
+# Check gender
+# Input:
+#   gameInfo - data
+# Returns: True/False
+def dbLibCheckGender(gender) -> bool:
+    ret = False
+    try:
+        iGender = int(gender)
+        if (gender ==1 or gender == 2):
+            ret = True
+    except:
+        log(str='Incorrect gender provided: {gender}', logLevel=LOG_ERROR)
+    return ret
+
 # Make useful map for image
 def dbGetImageInfo(queryResult):
     imageInfo = {}
-    if (len(queryResult) != 7):
+    if (len(queryResult) != 8):
         return imageInfo
     imageInfo['id'] = int(queryResult[0])
     imageInfo['personId'] = int(queryResult[1])
@@ -134,6 +148,9 @@ def dbGetImageInfo(queryResult):
     imageInfo['year'] = int(queryResult[4])
     imageInfo['year_str'] = queryResult[5]
     imageInfo['name'] = queryResult[6]
+    imageInfo['gender'] = queryResult[7]
+    if (imageInfo['gender']):
+        imageInfo['gender'] = int(imageInfo['gender'])
     return imageInfo
 
 # Make useful map for person
@@ -906,7 +923,7 @@ class Connection:
     #   None - if issue with connection
     def getImageInfoById(imageId):
         query = f'''
-                    select i.id,i.person,p.name,i.image_type,i.year,i.year_str,i.name
+                    select i.id,i.person,p.name,i.image_type,i.year,i.year_str,i.name,p.gender
                     from images as i 
                     join persons as p on i.person = p.id where i.id = %(id)s
                 '''
@@ -956,14 +973,14 @@ class Connection:
     def getAllImagesOfPerson(personId):
         fName = Connection.getAllImagesOfPerson.__name__
         if (not Connection.isInitialized()):
-            log(f"{fName}: Cannot get all images of person {personId} - connection is not initialized",LOG_ERROR)
+            log(str=f"{fName}: Cannot get all images of person {personId} - connection is not initialized",logLevel=LOG_ERROR)
             return None
         images = []
-        query = f"""select i.id, i.person, p.name, i.image_type, i.year, i.year_str, i.name
+        query = f"""select i.id, i.person, p.name, i.image_type, i.year, i.year_str, i.name,p.gender
                     from images as i join persons as p on i.person = p.id where p.id = %(id)s
                 """
         ret = Connection.executeQuery(query=query,params={'id':personId},all=True)
-        if (dbFound(ret)):
+        if (dbFound(result=ret)):
             for i in ret:
                 # Fill out persons info
                 image = dbGetImageInfo(queryResult=i)
@@ -1263,15 +1280,18 @@ class Connection:
     # Returns:
     #   None - issue with DB
     #   [{'personId':id,'personName':name}] - persons Info
-    def getNPersons(n, exclude, complexity, range=(None,None)):
+    def getNPersons(n, exclude, complexity, range=(None,None),gender=None):
         fName = Connection.getNPersons.__name__
         if ((len(range) != 2)):
-            log(f'{fName}: Wrong range format provided for person: {range}',LOG_WARNING)
+            log(str=f'{fName}: Wrong range format provided for person: {range}',logLevel=LOG_WARNING)
             range = (None, None)
         params = {'e':exclude, 'c':complexity,'n':n}
         query2 = ''
+        if (gender != None and dbLibCheckGender(gender=gender)):
+            query2 = query2 + ' and gender = %(gen)s'
+            params['gen'] = gender
         if ((range[0] != None) and (range[1] != None)):
-            query2 = ' and ((birth is %(start1)s or birth > %(start2)s) and (death is %(end1)s or death < %(end2)s))'
+            query2 = query2 + ' and ((birth is %(start1)s or birth > %(start2)s) and (death is %(end1)s or death < %(end2)s))'
             params['start1'] = None
             params['start2'] = range[0]
             params['end1'] = None

@@ -352,7 +352,7 @@ class GuessPersonBot:
         fName = self.startNewGame.__name__
         # Check user name format first
         if (not self.checkUser(telegramid=telegramid)):
-            log(f'{fName}: Unknown user {telegramid} provided',LOG_ERROR)
+            log(str=f'{fName}: Unknown user {telegramid} provided',logLevel=LOG_ERROR)
             self.sendMessage(telegramid=telegramid, text=DEFAULT_ERROR_MESSAGE)
             return
         # Get game type and complexity
@@ -370,7 +370,7 @@ class GuessPersonBot:
     def showQuestion(self,telegramid,type,gameId) -> None:
         fName = self.showQuestion.__name__
         if (not self.checkUser(telegramid=telegramid)):
-            log(f'{fName}: Unknown user {telegramid} provided',LOG_ERROR)
+            log(str=f'{fName}: Unknown user {telegramid} provided',logLevel=LOG_ERROR)
             self.sendMessage(telegramid=telegramid, text=DEFAULT_ERROR_MESSAGE)
             return
         if (type == 1):
@@ -444,19 +444,21 @@ class GuessPersonBot:
             self.sendMessage(telegramid=telegramid, text='Игра уже сыграна. Пожалуйста, начните новую.')
             return
         # Show image
-        log(f'URL={url}',LOG_DEBUG)
+        log(str=f'URL={url}',logLevel=LOG_DEBUG)
         self.bot.send_photo(chat_id=telegramid, photo=url)
         textQuestion = guess_game.getTextQuestion(gameInfo=gameInfo)
         if (gameType == 2): # Show answer options
             personId = imageInfo['personId']
             personName = imageInfo['personName']
+            gender = imageInfo['gender']
             # Get year range for creators
             yearRange = guess_game.getPersonByImageYearRange(intYear=imageInfo['year'])
             persons = Connection.getNPersons(
                 n=PERSONS_IN_TYPE2_ANSWER,
                 exclude=personId,
                 complexity=complexity,
-                range=yearRange)
+                range=yearRange,
+                gender=gender)
             persons.append({'personId':personId,'personName':personName})
             shuffle(persons)
             # Show buttons with answer options
