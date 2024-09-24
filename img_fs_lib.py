@@ -1,9 +1,12 @@
-from os import listdir
+from os import listdir, path
 from log_lib import *
+from PIL import Image
 
 # TODO: change this
-IMAGE_DIR = "/Users/a-arkhipov/Yandex.Disk.localized/Images/Личности/"
+#IMAGE_DIR = "/Users/a-arkhipov/Yandex.Disk.localized/Images/Личности/"
 IMAGE_DIR = "/Users/a-arkhipov/Downloads/Личности/"
+
+MAX_FILESIZE_KB = 256
 
 # Build image full path name
 def buildImgPathName(imgName:str) -> str:
@@ -83,17 +86,28 @@ def getImgs():
     fName = getImgs.__name__
     files = []
     for f in listdir(path=IMAGE_DIR):
+        #log(str=fr'{fName}: Handling file "{f}"', logLevel=LOG_DEBUG)
+        # Check file size
+        filesizeKB = int(path.getsize(filename=f'{IMAGE_DIR}/{f}')/1024)
+        if (filesizeKB > MAX_FILESIZE_KB):
+            log(str=fr'{fName}: File "{f}" is to large: {filesizeKB} KB', logLevel=LOG_WARNING)
+            continue
+
         f1 = f[:-4]
         # Skip '.DS_S'
         if f1 != '.DS_S':
             # Remove '.jpg'
             ff = f[-4:]
             if (ff != '.jpg'):
-                log(f'Is not .jpg: {f}',LOG_WARNING)
-            else:
-                files.append(f1)
+                log(str=f'Is not .jpg: {f}',logLevel=LOG_WARNING)
+                continue
+            # Check for \xa0 symbol
+            if ('\xa0' in f1):
+                log(str=fr'Special character "\xa0" is in file name {f1}', logLevel=LOG_WARNING)
+                continue
+            files.append(f1)
     numFiles = len(files)
-    log(f'{fName}: Number of files: {numFiles}')
+    log(str=f'{fName}: Number of files: {numFiles}')
 
     persons = []
     names = []
@@ -128,3 +142,46 @@ def getImgs():
 
     return [persons, names, years, intYears]
  
+# Get all images in directory
+def adjustImages() -> None:
+    TMP_IMAGE_DIR = IMAGE_DIR
+    fName = adjustImages.__name__
+    for f in listdir(path=TMP_IMAGE_DIR):
+        if (f != '.DS_Store'):
+            adjustImageSize(file=f'{TMP_IMAGE_DIR}/{f}')
+
+ # Adjust image size
+ # If bigger side is larget than 500px than shorten it to 500px and adjust smaller one accordingly
+def adjustImageSize(file) -> bool:
+    fName = adjustImageSize.__name__
+    MAXSIZE = 500
+    img = Image.open(file)
+    wid, hgt = img.size
+    maxSide = max(wid, hgt)
+    minSide = min(wid,hgt)
+    ret = False
+    if (maxSide > MAXSIZE):
+        oldFilesizeKB = int(path.getsize(filename=file)/1024)
+        newMax = MAXSIZE
+        newMin = int(minSide*MAXSIZE/maxSide)
+        if (wid > hgt):
+            newWid = newMax
+            newHgt = newMin
+        else:
+            newWid = newMin
+            newHgt = newMax
+
+        log(str=f'New size: {newWid}, {newHgt}',logLevel=LOG_DEBUG)
+        newSize = (newWid,newHgt)
+        img2 = img.resize(newSize, Image.HAMMING)
+        try:
+            img2.save(file)
+        except Exception as error:
+            log(str=f'{fName}: Error during resized file saving: {file} -> {error}',logLevel=LOG_ERROR)
+        newFilesizeKB = int(path.getsize(filename=file)/1024)
+        log(str=f'Image "{file}" resized from ({wid},{hgt}) to {newSize}: old file size {oldFilesizeKB} | new file size {newFilesizeKB}')
+        ret = True
+    else:
+        #log(str=f'No need to resize file {file} - current size ({wid},{hgt})',logLevel=LOG_DEBUG)
+        pass
+    return ret

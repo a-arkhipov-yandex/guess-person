@@ -1259,9 +1259,9 @@ class Connection:
     def getPersonInfoById(personId):
         fName = Connection.getPersonInfoById.__name__
         if (not personId):
-            log(f'{fName}: personID is not passed',LOG_ERROR)
+            log(str=f'{fName}: personID is not passed',logLevel=LOG_ERROR)
             return Connection.NOT_FOUND
-        query = "SELECT id,name,gender,country,birth,death,speciality,complexity FROM persons WHERE id =%(id)s"
+        query = "SELECT id,name,gender,country,birth,death,complexity,speciality FROM persons WHERE id =%(id)s"
         ret = Connection.executeQuery(query=query,params={'id':personId})
         if (dbFound(result=ret)):
             creatorInfo = dbGetPersonInfo(queryResult=ret)
@@ -1357,6 +1357,7 @@ class Connection:
             if (not newV):
                 newV = None
             if (dbPerson[k] != newV):
+                log(str=f'person={person}, dbPerson={dbPerson}',logLevel=LOG_DEBUG)
                 ret = False
                 break
         return ret
@@ -1370,13 +1371,21 @@ class Connection:
             return False
         pId = personInfo['id']
         name = personInfo['name']
-        cmpsty = personInfo['complexity']
+        cmpsty = None
+        if (personInfo['complexity']):
+            if (Connection.dbLibCheckGameComplexity(game_complexity=personInfo['complexity'])):
+                cmpsty = personInfo['complexity']
+            else:
+                log(str=f'{fName}: Complexity check failed: {personInfo["complexity"]}',logLevel=LOG_WARNING)
         gender = None
         if (personInfo['gender']):
-            gender = personInfo['gender']
-        if (not personInfo['birth']):
-            personInfo['birth'] = None
-        birth = personInfo['birth']
+            if (dbLibCheckGender(gender=personInfo['gender'])):
+                gender = personInfo['gender']
+            else:
+                log(str=f'{fName}: Gender check failed: {personInfo["gender"]}',logLevel=LOG_WARNING)
+        birth = None
+        if (personInfo['birth']):
+            birth = int(personInfo['birth'])
         if (not personInfo['death']):
             personInfo['death'] = None
         death = personInfo['death']
@@ -1433,7 +1442,7 @@ class Connection:
     # Update DB
     def updateDB(persons, names, years, intYears) -> None:
         if (not Connection.isInitialized()):
-            log("Cannot updateDB - connection is not initialized", LOG_ERROR)
+            log(str="Cannot updateDB - connection is not initialized", logLevel=LOG_ERROR)
             return
         Connection.bulkPersonsInsert(persons=persons)
         mPersons = Connection.getImagePersonMap(persons=persons, names=names, years=years, intYears=intYears)
@@ -1500,17 +1509,17 @@ class Connection:
     # Bulk image insertion
     def bulkImageInsersion(mPersons) -> None:
         if (not Connection.isInitialized()):
-            log("Cannot bulk image insert - connection is not initialized",LOG_ERROR)
+            log(str="Cannot bulk image insert - connection is not initialized",logLevel=LOG_ERROR)
             return
         # Pass through all the persons
         for person in mPersons:
             # Check that person is in DB
             personId = Connection.getPersonIdByName(person=person)
             if (personId == None):
-                log(f'Error getting person from DB: {person}',LOG_ERROR)
+                log(str=f'Error getting person from DB: {person}',logLevel=LOG_ERROR)
                 continue
             if (dbNotFound(result=personId)):
-                log(f'Cannot insert image. No such person in DB: {person}',LOG_ERROR)
+                log(str=f'Cannot insert image. No such person in DB: {person}',logLevel=LOG_ERROR)
                 continue
 
             # Get all imsages for person
