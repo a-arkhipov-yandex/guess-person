@@ -74,11 +74,6 @@ def getBotToken(test):
         token = getenv(ENV_BOTTOKENTEST)
     return token
 
-def getCurrentDateTime():
-    tzinfo=ZoneInfo('Europe/Moscow')
-    startTime = dt.now(tzinfo).strftime("%d-%m-%Y %H:%M:%S")
-    return startTime
-
 #=====================
 # Bot class
 #---------------------
