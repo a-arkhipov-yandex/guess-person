@@ -1,4 +1,3 @@
-import re
 import psycopg2
 from log_lib import *
 from guess_common_lib import *
@@ -598,15 +597,15 @@ class Connection:
         fName = Connection.getCurrentGameData.__name__
         ret = dbLibCheckTelegramid(telegramid=telegramid)
         if (not ret):
-            log(f'{fName}: Incorrect user {telegramid} provided',LOG_ERROR)
+            log(str=f'{fName}: Incorrect user {telegramid} provided',logLevel=LOG_ERROR)
             return None
-        userId = Connection.getUserIdByTelegramid(telegramid)
+        userId = Connection.getUserIdByTelegramid(telegramid=telegramid)
         if (dbNotFound(result=userId)):
-            log(f'{fName}: Cannot find user {telegramid}',LOG_ERROR)
+            log(str=f'{fName}: Cannot find user {telegramid}',logLevel=LOG_ERROR)
             return None
         ret = None
         query = 'select game_data from users where id=%(uId)s'
-        currentGameData = Connection.executeQuery(query, {'uId':userId})
+        currentGameData = Connection.executeQuery(query=query, params={'uId':userId})
         if (dbFound(result=currentGameData)):
             currentGameData = currentGameData[0]
             if (currentGameData):

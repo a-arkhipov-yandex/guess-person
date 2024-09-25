@@ -80,13 +80,33 @@ class guess_game:
     # Returns:
     #   [id1, ...] - GAME2NUMBEROFOPTIONS message ids
     #   None - if any error
-    def getMessageIds(mIdsTxt):
+    def getMessageIds(mIdsTxt:str):
         mIds = []
         for item in mIdsTxt.split(' '):
             mIds.append(int(item))
         if (len(mIds) != guess_game.GAME2NUMBEROFOPTIONS + 1): # +1 correct answer
             return None
         return mIds
+
+    # Extract message id and image id for photo
+    # Returns:
+    #   (message_id, image_id) - message id and image id
+    #   None - if any error
+    def getMessageIdAndMessagePhotoId(gameData):
+        fName = guess_game.getMessageIdAndMessagePhotoId.__name__
+        gameData = str(gameData)
+        ret = None
+        data = gameData.split(sep=' ')
+        if (len(data) != 2):
+            return ret
+        messageId = data[0]
+        imageId = data[1]
+        try:
+            imageId = int(imageId)
+        except:
+            log(str=f'{fName}: Image id is not int: {imageId}',logLevel=LOG_ERROR)
+            None
+        return (messageId, imageId)
 
     # Get random person and ramdom image of this person
     # Returns:

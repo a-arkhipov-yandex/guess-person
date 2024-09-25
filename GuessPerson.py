@@ -1,3 +1,4 @@
+from typing import Literal
 from db_lib import *
 from log_lib import *
 from GuessPersonBot import *
@@ -5,10 +6,10 @@ from GuessPersonBot import *
 #===============
 # Main section
 #---------------
-def main():
+def main() -> Literal[0]:
     initLog()
     TESTCONNECTION = isTestDB()
-    log(f'Test DB = {TESTCONNECTION}',LOG_DEBUG)
+    log(str=f'Test DB = {TESTCONNECTION}',logLevel=LOG_DEBUG)
     Connection.initConnection(test=TESTCONNECTION)
     bot = GuessPersonBot()
     if (not GuessPersonBot.isInitialized()):

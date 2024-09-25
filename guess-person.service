@@ -1,0 +1,16 @@
+[Unit]
+Description=Guess person game telegram bot
+
+[Service]
+User=alex-arkhipov
+Group=alex-arkhipov
+Type=exec
+WorkingDirectory=/home/alex-arkhipov/Neo/guess-person
+ExecStart=/home/alex-arkhipov/python-venv/bin/python3 /home/alex-arkhipov/Neo/guess-person/GuessPerson.py
+ExecReload=/bin/kill -s HUP $MAINPID
+TimeoutSec=5
+RestartSec=5
+Restart=always
+
+[Install]
+WantedBy=multi-user.target

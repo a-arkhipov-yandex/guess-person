@@ -4,9 +4,6 @@ import telebot
 from telebot import types
 import re
 import requests
-from datetime import datetime as dt
-from datetime import timedelta
-from zoneinfo import ZoneInfo
 from log_lib import *
 from db_lib import *
 from game_lib import *
@@ -25,18 +22,6 @@ CMD_START = '/start'
 CMD_HELP = '/help'
 CMD_SETTINGS = '/settings'
 
-CALLBACK_ACTION_TAG = 'actionId:'
-CALLBACK_ACTIONACTIVATE_TAG = 'activateActionId:'
-CALLBACK_ACTIONCOMPLETE_TAG = 'completeActionId:'
-CALLBACK_ACTIONCANCEL_TAG = 'cancelActionId:'
-CALLBACK_ACTIONREMINDERSET_TAG = 'reminderSetActionId:'
-CALLBACK_ACTIONREMINDERSTOP_TAG = 'reminderStopActionId:'
-CALLBACK_ACTIONTITLECHANGE_TAG = 'titleChangeTitle:'
-CALLBACK_ACTIONHIDEMENU_TAG = 'hideMenu:'
-CALLBACK_ACTIONTEXTADD_TAG = 'textAdd:'
-CALLBACK_SEARCHACTIVEACTIONS_TAG = 'searchActiveActions:'
-CALLBACK_SEARCHALLACTIONS_TAG = 'searchAllActions:'
-
 CALLBACK_COMPLEXITY_TAG = 'complexity:'
 CALLBACK_TYPE1_TAG = 'type1answer:'
 CALLBACK_TYPE2_TAG = 'type2answer:'
@@ -52,7 +37,7 @@ PERSONS_IN_TYPE2_ANSWER = 5
 def isTestBot() -> bool:
     load_dotenv()
     ret = True
-    testbot = getenv(ENV_TESTBOT)
+    testbot = getenv(key=ENV_TESTBOT)
     if (testbot):
         if (testbot == "False"):
             ret = False
@@ -61,7 +46,7 @@ def isTestBot() -> bool:
 def isTestDB() -> bool:
     load_dotenv()
     ret = True
-    testdb = getenv(ENV_TESTDB)
+    testdb = getenv(key=ENV_TESTDB)
     if (testdb):
         if (testdb == "False"):
             ret = False
@@ -69,9 +54,9 @@ def isTestDB() -> bool:
 
 def getBotToken(test):
     load_dotenv()
-    token = getenv(ENV_BOTTOKEN)
+    token = getenv(key=ENV_BOTTOKEN)
     if (test):
-        token = getenv(ENV_BOTTOKENTEST)
+        token = getenv(key=ENV_BOTTOKENTEST)
     return token
 
 #=====================
@@ -84,60 +69,39 @@ class GuessPersonBot:
         GuessPersonBot.__bot.register_message_handler(callback=self.messageHandler)
         GuessPersonBot.__bot.register_callback_query_handler(
             callback=self.complexityHandler,
-            func=lambda message: re.match(fr'^{CALLBACK_COMPLEXITY_TAG}\d+$', message.data)
+            func=lambda message: re.match(pattern=fr'^{CALLBACK_COMPLEXITY_TAG}\d+$', string=message.data)
         )
         GuessPersonBot.__bot.register_callback_query_handler(
             callback=self.gameTypeHandler,
-            func=lambda message: re.match(fr'^{CALLBACK_GAMETYPE_TAG}\d+$', message.data)
+            func=lambda message: re.match(pattern=fr'^{CALLBACK_GAMETYPE_TAG}\d+$', string=message.data)
         )
         GuessPersonBot.__bot.register_callback_query_handler(
             callback=self.cmdStartHandler,
-            func=lambda message: re.match(fr'^{CMD_START}$', message.data)
+            func=lambda message: re.match(pattern=fr'^{CMD_START}$', string=message.data)
         )
         GuessPersonBot.__bot.register_callback_query_handler(
             callback=self.settingsCallbackHandler,
-            func=lambda message: re.match(fr'^{CMD_SETTINGS}$', message.data)
+            func=lambda message: re.match(pattern=fr'^{CMD_SETTINGS}$', string=message.data)
         )
         GuessPersonBot.__bot.register_callback_query_handler(
             callback=self.answerHandlerType1,
-            func=lambda message: re.match(fr'^{CALLBACK_TYPE1_TAG}\d+$', message.data)
+            func=lambda message: re.match(pattern=fr'^{CALLBACK_TYPE1_TAG}\d+$', string=message.data)
         )
         GuessPersonBot.__bot.register_callback_query_handler(
             callback=self.answerHandlerType2,
-            func=lambda message: re.match(fr'^{CALLBACK_TYPE2_TAG}\d+$', message.data)
+            func=lambda message: re.match(pattern=fr'^{CALLBACK_TYPE2_TAG}\d+$', string=message.data)
         )
-        '''
-        NeoOperationBot.__bot.register_callback_query_handler(
-            self.titleChangeActionHandler,
-            func=lambda message: re.match(fr'^{CALLBACK_ACTIONTITLECHANGE_TAG}\d+$', message.data)
-        )
-        NeoOperationBot.__bot.register_callback_query_handler(
-            self.hideMenuHandler,
-            func=lambda message: re.match(fr'^{CALLBACK_ACTIONHIDEMENU_TAG}\d+$', message.data)
-        )
-        NeoOperationBot.__bot.register_callback_query_handler(
-            self.textAddHandler,
-            func=lambda message: re.match(fr'^{CALLBACK_ACTIONTEXTADD_TAG}\d+$', message.data)
-        )
-        NeoOperationBot.__bot.register_callback_query_handler(
-            self.cmdSearchActionsHandler,
-            func=lambda message: re.match(fr'^{CALLBACK_SEARCHACTIVEACTIONS_TAG}\d+$', message.data)
-        )
-        NeoOperationBot.__bot.register_callback_query_handler(
-            self.cmdSearchActionsHandler,
-            func=lambda message: re.match(fr'^{CALLBACK_SEARCHALLACTIONS_TAG}\d+$', message.data)
-        )'''
 
     def initBot(self) -> bool:
         # Check if bot is already initialized
         if (GuessPersonBot.isInitialized()):
-            log(f'Bot is already initialized', LOG_WARNING)
+            log(str=f'Bot is already initialized', logLevel=LOG_WARNING)
             return False
         # Initialize bot first time
         isTest = isTestBot()
         botToken = getBotToken(test=isTest)
         if (not botToken):
-            log(f'Cannot read ENV vars: botToken={botToken}', LOG_ERROR)
+            log(str=f'Cannot read ENV vars: botToken={botToken}', logLevel=LOG_ERROR)
             return False
         log(f'Bot initialized successfully (test={isTest})')
         GuessPersonBot.__bot = telebot.TeleBot(token=botToken)
@@ -159,17 +123,17 @@ class GuessPersonBot:
 
     def startBot(self):
         if (not GuessPersonBot.isInitialized()):
-            log(f'Bot is not initialized - cannot start', LOG_ERROR)
+            log(str=f'Bot is not initialized - cannot start', logLevel=LOG_ERROR)
             return False
-        log(f'Starting bot...')
+        log(str=f'Starting bot...')
         while(True):
             try:
                 self.bot.infinity_polling()
             except KeyboardInterrupt:
-                log('Exiting by user request')
+                log(str='Exiting by user request')
                 break
             except requests.exceptions.ReadTimeout as error:
-                log(f'startBot: exception: {error}', LOG_ERROR)
+                log(str=f'startBot: exception: {error}', logLevel=LOG_ERROR)
 
     # Message handler
     def messageHandler(self, message:types.Message) -> None:
@@ -177,7 +141,7 @@ class GuessPersonBot:
         username = message.from_user.username
         telegramid = message.from_user.id
         if (not GuessPersonBot.isInitialized()):
-            log(f'{fName}: Bot is not initialized - cannot start', LOG_ERROR)
+            log(str=f'{fName}: Bot is not initialized - cannot start', logLevel=LOG_ERROR)
             return
         # Check if photo recieved
         if (message.text != None):
@@ -203,12 +167,12 @@ class GuessPersonBot:
         fName = self.cmdHandler.__name__
         telegramid = message.from_user.id
         username = message.from_user.username
-        log(f'{fName}: Got message cmd "{message.text}"',LOG_DEBUG)
+        log(str=f'{fName}: Got message cmd "{message.text}"',logLevel=LOG_DEBUG)
         if (not self.checkUser(telegramid=telegramid)):
             # Register new user if not registered yet
             userId = Connection.insertUser(telegramid=telegramid)
             if (not userId):
-                log(f'{fName}: Cannot register user {username}', LOG_ERROR)
+                log(str=f'{fName}: Cannot register user {username}', logLevel=LOG_ERROR)
                 self.sendMessage(telegramid=telegramid, text=DEFAULT_ERROR_MESSAGE)
                 return
         text = message.text.lower()
@@ -223,15 +187,14 @@ class GuessPersonBot:
             self.sendMessage(telegramid=telegramid, text=self.getHelpMessage(username=message.from_user.username))
 
     # Send message to user
-    # Returns: Message ID
+    # Returns: Message ID or None in case of error
     def sendMessage(self, telegramid, text):
         if (GuessPersonBot.isInitialized()):
-            ret = GuessPersonBot.__bot.send_message(telegramid, text)
+            ret = GuessPersonBot.__bot.send_message(chat_id=telegramid, text=text)
             return ret.message_id
         return None
 
     def cmdStartHandler(self, message:types.Message) -> None:
-        fName = self.cmdStartHandler.__name__
         telegramid = message.from_user.id
         self.startNewGame(telegramid=telegramid)
 
@@ -247,7 +210,7 @@ class GuessPersonBot:
     # Returns help message
     def getHelpMessage(self, username) -> str:
         if (not GuessPersonBot.isInitialized()):
-            log(f'Bot is not initialized - cannot start', LOG_ERROR)
+            log(str=f'Bot is not initialized - cannot start', logLevel=LOG_ERROR)
             return ''
         ret = self.getWelcomeMessage(username=username)
         return ret + f'''
@@ -257,7 +220,9 @@ class GuessPersonBot:
         {CMD_SETTINGS} - выбрать уровень сложности и тип игры
         '''
     # Get welcome message
-    def getWelcomeMessage(self, username):
+    def getWelcomeMessage(self, username) -> str:
+        if (username == None):
+            username = ''
         ret = f'''
         Добро пожаловать, {username}!
         Это игра "Guess Person". Версия: {VERSION}
@@ -283,10 +248,10 @@ class GuessPersonBot:
     def complexityHandler(self, message: types.CallbackQuery) -> None:
         fName = self.complexityHandler.__name__
         telegramid = message.from_user.id
-        log(f'{fName}: Complexity handler invoked for user {telegramid}: "{message.data}"',LOG_DEBUG)
+        log(str=f'{fName}: Complexity handler invoked for user {telegramid}: "{message.data}"',logLevel=LOG_DEBUG)
         self.bot.answer_callback_query(callback_query_id=message.id)
         if (not self.checkUser(telegramid=telegramid)):
-            log(f'{fName}: Unknown user {telegramid} provided',LOG_ERROR)
+            log(str=f'{fName}: Unknown user {telegramid} provided',logLevel=LOG_ERROR)
             self.sendMessage(telegramid=telegramid, text=DEFAULT_ERROR_MESSAGE)
             return
         complexity = int(message.data.split(sep=':')[1])
@@ -322,8 +287,8 @@ class GuessPersonBot:
     def gameTypeHandler(self, message: types.CallbackQuery) -> None:
         fName = self.gameTypeHandler.__name__
         telegramid = message.from_user.id
-        log(f'{fName}: Game type handler invoked for user {telegramid}: "{message.data}"',LOG_DEBUG)
         self.bot.answer_callback_query(callback_query_id=message.id)
+        log(str=f'{fName}: Game type handler invoked for user {telegramid}: "{message.data}"',logLevel=LOG_DEBUG)
         if (not self.checkUser(telegramid=telegramid)):
             log(f'{fName}: Unknown user {telegramid} provided',LOG_ERROR)
             self.sendMessage(telegramid=telegramid, text=DEFAULT_ERROR_MESSAGE)
@@ -385,7 +350,7 @@ class GuessPersonBot:
     def showQuestionType1(self,telegramid, gameId) -> None:
         fName = self.showQuestionType1.__name__
         if (not self.checkUser(telegramid=telegramid)):
-            log(f'{fName}: Unknown user {telegramid} provided',LOG_ERROR)
+            log(str=f'{fName}: Unknown user {telegramid} provided',logLevel=LOG_ERROR)
             self.sendMessage(telegramid=telegramid, text=DEFAULT_ERROR_MESSAGE)
             return
         # Get gameInfo
@@ -396,7 +361,7 @@ class GuessPersonBot:
             return
         imageIds = guess_game.getQuestionType1Options(gameInfo=gameInfo)
         if (not imageIds):
-            log(f'{fName}: Wrong format of imageIds = {imageIds}', LOG_ERROR)
+            log(str=f'{fName}: Wrong format of imageIds = {imageIds}', logLevel=LOG_ERROR)
             self.sendMessage(telegramid=telegramid, text=DEFAULT_ERROR_MESSAGE)
             return
         data = []
@@ -429,7 +394,7 @@ class GuessPersonBot:
     def showQuestionType2(self, telegramid, gameId, gameType = 2) -> None:
         fName = self.showQuestionType2.__name__
         if (not self.checkUser(telegramid=telegramid)):
-            log(f'{fName}: Unknown user {telegramid} provided',LOG_ERROR)
+            log(str=f'{fName}: Unknown user {telegramid} provided',logLevel=LOG_ERROR)
             self.sendMessage(telegramid=telegramid, text=DEFAULT_ERROR_MESSAGE)
             return
         # Get gameInfo
@@ -446,7 +411,13 @@ class GuessPersonBot:
             return
         # Show image
         log(str=f'URL={url}',logLevel=LOG_DEBUG)
-        self.bot.send_photo(chat_id=telegramid, photo=url)
+        message = self.bot.send_photo(chat_id=telegramid, photo=url)
+        # Save options in current game data
+        gameData = f'{message.id} {imageId}'
+        ret = Connection.setCurrentGameData(telegramid=telegramid, gameData=gameData)
+        if (not ret):
+            log(str=f'{fName}: Cannot save game data', logLevel=LOG_WARNING)
+
         textQuestion = guess_game.getTextQuestion(gameInfo=gameInfo)
         if (gameType == 2): # Show answer options
             personId = imageInfo['personId']
@@ -467,11 +438,11 @@ class GuessPersonBot:
             for i in range(0, len(persons)): # 2 because we start with 1 + correct creator
                 personId = persons[i].get('personId')
                 if (not personId):
-                    log(f'{fName}: Cannot get personId: {persons[i]}',LOG_WARNING)
+                    log(str=f'{fName}: Cannot get personId: {persons[i]}',logLevel=LOG_WARNING)
                     continue
                 personName = persons[i].get('personName')
                 if (not personName):
-                    log(f'{fName}: Cannot get personName: {persons[i]}',LOG_WARNING)
+                    log(str=f'{fName}: Cannot get personName: {persons[i]}',logLevel=LOG_WARNING)
                     continue
                 data = f'{CALLBACK_TYPE2_TAG}{personId}'
                 key = types.InlineKeyboardButton(text=personName, callback_data=data)
@@ -503,7 +474,7 @@ class GuessPersonBot:
         question = 'Выберите дальнейшее действие:'
         self.bot.send_message(chat_id=telegramid, text=question, reply_markup=keyboard)
 
-    # Modify captures of images with creator, name, year
+    # Modify captures of images with person, name, year
     def modifyImageCaptures(self, telegramid, mIds, imageIds) -> None:
         fName = self.modifyImageCaptures.__name__
         if (not self.checkUser(telegramid=telegramid)):
@@ -556,12 +527,12 @@ class GuessPersonBot:
     def answerHandlerType1(self, message: types.CallbackQuery) -> None:
         fName = self.answerHandlerType1.__name__
         telegramid = message.from_user.id
+        self.bot.answer_callback_query(callback_query_id=message.id)
         if (not self.checkUser(telegramid=telegramid)):
             log(str=f'{fName}: Unknown user {telegramid} provided',logLevel=LOG_ERROR)
             self.sendMessage(telegramid=telegramid, text=DEFAULT_ERROR_MESSAGE)
             return
-        self.bot.answer_callback_query(callback_query_id=message.id)
-        imageId = int(message.data.split(':')[1])
+        imageId = int(message.data.split(sep=':')[1])
         # Get current game
         gameId = Connection.getCurrentGame(telegramid=telegramid)
         if (not gameId):
@@ -608,12 +579,14 @@ class GuessPersonBot:
             log(str=f'{fName}: Unknown user {telegramid} provided',logLevel=LOG_ERROR)
             self.sendMessage(telegramid=telegramid, text=DEFAULT_ERROR_MESSAGE)
             return
-        personId = int(message.data.split(':')[1])
+        personId = int(message.data.split(sep=':')[1])
         # Get current game
         gameId = Connection.getCurrentGame(telegramid=telegramid)
         if (not gameId):
             self.sendMessage(telegramid=telegramid, text=f'Нет запущенных игр. Введите "{CMD_START}" чтобы начать новую.')
             return
+        # Modify photo capture
+        self.modifyPhotoCapture(telegramid=telegramid)
         # Finish game and return result
         guess_game.finishGame(telegramid=telegramid, gameId=gameId, answer=personId)
         # Get game info
@@ -624,9 +597,6 @@ class GuessPersonBot:
         correctAnswerId = gameInfo.get('correct_answer')
         personInfo = Connection.getPersonInfoById(personId=correctAnswerId)
         if (dbFound(result=personInfo)):
-            writeForm = ""
-            if (dbIsWoman(gender=personInfo['gender'])):
-                writeForm = 'а'
             correctAnswer = personInfo['name']
             correctMessage = f'Это - "{correctAnswer}".'
             self.showGameResult(telegramid=telegramid, result=result,
@@ -660,24 +630,34 @@ class GuessPersonBot:
             answer = 0
             if (self.checkAnswerGameType3(userPersonName=personName, correctPersonName=correctAnswer)):
                 answer = correctAnswerId # User is correct
+            # Modify photo capture
+            self.modifyPhotoCapture(telegramid=telegramid)
             # Finish game and return result
             guess_game.finishGame(telegramid=telegramid, gameId=gameId, answer=answer)
-            # Check result
-            # Get game info to update result
+            # Get game info again to update result
             gameInfo = Connection.getGameInfoById(gameId=gameId)
             result = gameInfo['result']
-            creatorInfo = Connection.getPersonInfoById(personId=correctAnswerId)
-            writeForm = ""
-            if (dbFound(result=creatorInfo)):
-                if (dbIsWoman(gender=creatorInfo['gender'])):
-                    writeForm = 'а'
-            correctMessage = f'Эту - {correctAnswer}.'
+            correctMessage = f'Это - {correctAnswer}.'
             self.showGameResult(telegramid=telegramid, result=result,
                                 correctAnswer=correctAnswer, correctMessage=correctMessage)
         else:
             log(str=f'{fName}: Cannot get person data from DB: {correctAnswerId}',logLevel=LOG_ERROR)
             self.sendMessage(telegramid=telegramid, text=DEFAULT_ERROR_MESSAGE)
 
+    # Modify previous photo capture
+    def modifyPhotoCapture(self, telegramid) -> None:
+        fName = self.modifyPhotoCapture.__name__
+        gameData = Connection.getCurrentGameData(telegramid=telegramid)
+        if (dbFound(result=gameData)):
+            retVal = guess_game.getMessageIdAndMessagePhotoId(gameData=gameData)
+            if (retVal):
+                mPhotoId = retVal[0]
+                imageId = retVal[1]
+                self.modifyImageCapture(telegramid=telegramid, messageId=mPhotoId, imageId=imageId)
+            else:
+                log(str=f'{fName}: Cannot get message id and photo id for user {telegramid}',logLevel=LOG_WARNING)
+        else:
+            log(str=f'{fName}: Cannot get game data for user {telegramid}',logLevel=LOG_WARNING)
 
     # Find number of correct answer in type 1 question
     # Returns:
