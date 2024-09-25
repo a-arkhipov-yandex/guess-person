@@ -704,8 +704,8 @@ class GuessPersonBot:
         lU = len(userPersonName)
         lC = len(correctPersonName)
         # 2. Check length of userAnswer
-        if (lU > lC):
-            log(f'User len > correct len: {lU} > {lC}',LOG_DEBUG)
+        if (lU > lC+2):
+            log(f'User len > correct len: {lU} > {lC}+2',LOG_DEBUG)
             return False
         
         # 3. Check if only one word in answer (probably last name)

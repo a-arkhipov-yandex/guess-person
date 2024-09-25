@@ -94,7 +94,7 @@ class guess_game:
     #   None - if any error
     def getMessageIdAndMessagePhotoId(gameData):
         fName = guess_game.getMessageIdAndMessagePhotoId.__name__
-        gameData = str(gameData)
+        gameData = str(object=gameData)
         ret = None
         data = gameData.split(sep=' ')
         if (len(data) != 2):
