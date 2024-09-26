@@ -46,11 +46,15 @@ class guess_game:
         ret = None
         game_type = queryParams.get('type')
         game_complexity = queryParams.get('complexity')
-        if (not Connection.dbLibCheckGameType(game_type)):
+        game_speciality = queryParams.get('speciality')
+        if (not Connection.dbLibCheckGameType(game_type=game_type)):
             print(f'{fName}: game type is incorect ({game_type})',LOG_ERROR)
             return None
-        if (not Connection.dbLibCheckGameComplexity(game_complexity)):
+        if (not Connection.dbLibCheckGameComplexity(game_complexity=game_complexity)):
             print(f'{fName}: game complexity is incorect ({game_complexity})',LOG_ERROR)
+            return None
+        if (not Connection.dbLibCheckGameSpeciality(game_speciality=game_speciality)):
+            print(f'{fName}: game speciality is incorect ({game_speciality})',LOG_ERROR)
             return None
         game_type = int(game_type)
         if (game_type == 1):
@@ -112,14 +116,14 @@ class guess_game:
     # Returns:
     #   (personId, imageId) - tuple with ids
     #   None - in case of any errors
-    def getRandomPersonAndImageId(complexity):
+    def getRandomPersonAndImageId(complexity, speciality = None):
         fName = guess_game.getRandomPersonAndImageId.__name__
        # Get random creator
-        ret = Connection.getRandomPersonIds(complexity=complexity)
+        ret = Connection.getRandomPersonIds(complexity=complexity,speciality=speciality)
         if (ret == None):
-            print(f'{fName}: Cannoe get random person: DB issue', LOG_ERROR)
+            print(f'{fName}: Cannot get random person: DB issue', LOG_ERROR)
             return None
-        elif (dbNotFound(ret)):
+        elif (dbNotFound(result=ret)):
             print(f'{fName}: Cannot get random person: person not found',LOG_ERROR)
             return None  
         personId = ret[0]
@@ -148,7 +152,9 @@ class guess_game:
             complexity = DEFAULT_GAMECOMPLEXITY
         else:
             complexity = int(complexity)
-        ret = guess_game.getRandomPersonAndImageId(complexity=complexity)
+        # Check speciality
+        speciality = queryParams.get('speciality')
+        ret = guess_game.getRandomPersonAndImageId(complexity=complexity,speciality=speciality)
         if (not ret):
             return None # Error message is printed in getRandom function
         personId = ret[0]
@@ -163,7 +169,8 @@ class guess_game:
             personId=personId,
             complexity=complexity, 
             n=guess_game.GAME2NUMBEROFOPTIONS,
-            range=yearRange)
+            range=yearRange,
+            speciality=speciality)
         if (dbNotFound(result=otherImageIds) or len(otherImageIds) != guess_game.GAME2NUMBEROFOPTIONS):
             print(f'{fName}: Cannot get random {guess_game.GAME2NUMBEROFOPTIONS} images of creator other than {personId}',LOG_ERROR)
             return None
@@ -212,7 +219,8 @@ class guess_game:
         if (not complexity):
             complexity = DEFAULT_GAMECOMPLEXITY
         complexity = int(complexity)
-        newGameId = guess_game.getRandomPersonAndImageId(complexity=complexity)
+        speciality = queryParams.get('speciality')
+        newGameId = guess_game.getRandomPersonAndImageId(complexity=complexity, speciality=speciality)
         if (not newGameId):
             return None # Error message is printed in getRandom function
         personId = newGameId[0]

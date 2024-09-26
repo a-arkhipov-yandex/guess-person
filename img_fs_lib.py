@@ -1,4 +1,4 @@
-from os import listdir, path
+from os import listdir, path, rename
 from log_lib import *
 from PIL import Image
 
@@ -103,8 +103,10 @@ def getImgs():
                 continue
             # Check for \xa0 symbol
             if ('\xa0' in f1):
-                log(str=fr'Special character "\xa0" is in file name {f1}', logLevel=LOG_WARNING)
-                continue
+                f2 = f1.replace('\xa0', ' ')
+                rename(src=f'{IMAGE_DIR}/{f1}.jpg', dst=f'{IMAGE_DIR}/{f2}.jpg')
+                log(str=fr'Special character "\xa0" is in file name {f1} - renaming', logLevel=LOG_WARNING)
+                f1 = f2
             files.append(f1)
     numFiles = len(files)
     log(str=f'{fName}: Number of files: {numFiles}')
@@ -127,6 +129,7 @@ def getImgs():
         if title != tmp[1]:
             log(f'{fName}: Spaces in name {tmp}',LOG_WARNING)
         names.append(title)
+
         year = '0'
         if (lTmp == 3): # There is year in file name
             year = tmp[2].strip()
@@ -143,16 +146,33 @@ def getImgs():
     return [persons, names, years, intYears]
  
 # Get all images in directory
-def adjustImages() -> None:
+def adjustImages(dry_run = False) -> None:
     TMP_IMAGE_DIR = IMAGE_DIR
     fName = adjustImages.__name__
     for f in listdir(path=TMP_IMAGE_DIR):
         if (f != '.DS_Store'):
-            adjustImageSize(file=f'{TMP_IMAGE_DIR}/{f}')
+            adjustImageSize(file=f'{TMP_IMAGE_DIR}/{f}',dry_run=dry_run)
+    for f in listdir(path=TMP_IMAGE_DIR):
+        if (f != '.DS_Store'):
+            adjustImageName(file=f'{TMP_IMAGE_DIR}/{f}',dry_run=dry_run)
 
  # Adjust image size
  # If bigger side is larget than 500px than shorten it to 500px and adjust smaller one accordingly
-def adjustImageSize(file) -> bool:
+def adjustImageName(file, dry_run = False) -> bool:
+    fName = adjustImageName.__name__
+    file1 = file.replace('ё','е') # Replace 'ё'ё
+    file1 = file1.replace('ё','е') # Replace 'ё' another ё
+    file2 = file1.replace('й','й') # Replace 'й'
+    if (file2 != file1):
+        log(str=f'{fName}: Renaming {file} to {file2}')
+        if (not dry_run):
+            rename(src=file, dst=file2)
+        pass
+
+
+ # Adjust image size
+ # If bigger side is larget than 500px than shorten it to 500px and adjust smaller one accordingly
+def adjustImageSize(file, dry_run = False) -> bool:
     fName = adjustImageSize.__name__
     MAXSIZE = 500
     img = Image.open(file)
@@ -171,17 +191,23 @@ def adjustImageSize(file) -> bool:
             newWid = newMin
             newHgt = newMax
 
-        log(str=f'New size: {newWid}, {newHgt}',logLevel=LOG_DEBUG)
         newSize = (newWid,newHgt)
         img2 = img.resize(newSize, Image.HAMMING)
-        try:
-            img2.save(file)
-        except Exception as error:
-            log(str=f'{fName}: Error during resized file saving: {file} -> {error}',logLevel=LOG_ERROR)
-        newFilesizeKB = int(path.getsize(filename=file)/1024)
-        log(str=f'Image "{file}" resized from ({wid},{hgt}) to {newSize}: old file size {oldFilesizeKB} | new file size {newFilesizeKB}')
+        if (not dry_run):
+            try:
+                img2.save(file)
+            except Exception as error:
+                log(str=f'{fName}: Error during resized file saving: {file} -> {error}',logLevel=LOG_ERROR)
+            newFilesizeKB = int(path.getsize(filename=file)/1024)
+            log(str=f'Image "{file}" resized from ({wid},{hgt}) to {newSize}: old file size {oldFilesizeKB} | new file size {newFilesizeKB}')
+        else:
+            log(str=f'Image "{file}" should be resized from ({wid},{hgt}) to {newSize}: old file size {oldFilesizeKB}')
         ret = True
     else:
         #log(str=f'No need to resize file {file} - current size ({wid},{hgt})',logLevel=LOG_DEBUG)
         pass
     return ret
+
+def getFilesInImageDir() -> list[str]:
+    files = listdir(path=IMAGE_DIR)
+    return files

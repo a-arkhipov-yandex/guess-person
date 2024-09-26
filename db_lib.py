@@ -211,23 +211,23 @@ class Connection:
     BASE_URL_KEY = 'IMAGE_URL'
 
     # Init connection - returns True/False
-    def initConnection(test=False):
+    def initConnection(test=False) -> bool:
         ret = False
         if (not Connection.__isInitialized):
-            Connection.__connection = Connection.__newConnection(test)
+            Connection.__connection = Connection.__newConnection(test=test)
             if (Connection.isInitialized()):
                 # Cache section
-                Connection.__baseImageUrl = Connection.getSettingValue(Connection.BASE_URL_KEY)
+                Connection.__baseImageUrl = Connection.getSettingValue(key=Connection.BASE_URL_KEY)
                 Connection.__gameTypes = Connection.getGameTypesFromDb()
                 Connection.__complexities = Connection.getComplexitiesFromDb()
                 Connection.__imageTypes = Connection.getImageTypesFromDb()
                 Connection.__specialities = Connection.getSpecialitiesFromDb()
-                log(f"DB Connection created (test={test})", LOG_DEBUG)
+                log(str=f"DB Connection created (test={test})", logLevel=LOG_DEBUG)
                 ret = True
             else:
-                log(f'Cannot initialize connection to DB',LOG_ERROR)
+                log(str=f'Cannot initialize connection to DB',logLevel=LOG_ERROR)
         else:
-                log(f'Trying to initialize connection that already initialized',LOG_WARNING)
+                log(str=f'Trying to initialize connection that already initialized',logLevel=LOG_WARNING)
         return ret
     
     def getConnection():
@@ -359,6 +359,23 @@ class Connection:
             ret = True
         return ret
 
+    # Check game type (can be string or int with value 1 or 2)
+    def dbLibCheckGameSpeciality(game_speciality) -> bool:
+        fName = Connection.dbLibCheckGameSpeciality.__name__
+        ret = False
+        if (game_speciality == None): # Speciality can be cleared
+            return True
+        iSpeciality = 0
+        try:
+            iSpeciality = int(game_speciality)
+        except:
+            log(str=f'{fName}: Speciality is not int: {game_speciality}',logLevel=LOG_ERROR)
+            return ret
+        gameSpecialities = Connection.getSpecialities()
+        if (iSpeciality >= 1 and iSpeciality <= len(gameSpecialities)):
+            ret = True
+        return ret
+
     #=======================
     # Common section
     #-----------------------
@@ -431,45 +448,58 @@ class Connection:
 
     # Get image types from cache
     # Returns:
-    #   [[image_type_id, image_type]]
+    #   [[type_id, name]]
     #   None - connection not initialized
     def getImageTypes():
         if (Connection.isInitialized()):
             return Connection.__imageTypes
         return None
 
-    # Get image types from DB
+    # Get person specialities from DB
     # Returns:
-    #   [[image_type_id, image_type]]
+    #   [[speciality_id, speciality]]
     #   NOT_FOUND - no image_types in DB
     #   None - issue with connection
     def getSpecialitiesFromDb():
-        query = 'select id,speciality from specialities order by id asc'
-        ret = Connection.executeQuery(query,{},True)
+        query = 'select id,speciality,show from specialities order by id asc'
+        ret = Connection.executeQuery(query=query,params={},all=True)
         return ret
 
-    # Get image types from cache
+    # Get image specialities from cache
     # Returns:
-    #   [[image_type_id, image_type]]
+    #   [[speciality_id, speciality]]
     #   None - connection not initialized
     def getSpecialities():
         if (Connection.isInitialized()):
             return Connection.__specialities
         return None
 
-    # Get game types from DB
+    # Get image specialities from cache to show
+    # Returns:
+    #   [[speciality_id, speciality]]
+    #   None - connection not initialized
+    def getSpecialitiesToShow():
+        ret = None
+        if (Connection.isInitialized()):
+            ret = []
+            for spec in Connection.__specialities:
+                if (spec[2]):
+                    ret.append(spec)
+        return ret
+
+    # Get complexities from DB
     # Returns:
     #   [[complexity_id, name]]
     #   NOT_FOUND - no complexities in DB
     #   None - issue with connection
     def getComplexitiesFromDb():
         query = 'select id,name from game_complexities'
-        ret = Connection.executeQuery(query,{},True)
+        ret = Connection.executeQuery(query=query,params={},all=True)
         return ret
 
-    # Get game types from cache
+    # Get game complexities from cache
     # Returns:
-    #   [[game_type_id, name, question]]
+    #   [[complexity_id, name]]
     #   None - connection not initialized
     def getComplexities():
         if (Connection.isInitialized()):
@@ -505,10 +535,10 @@ class Connection:
     #   [game_type,game_complexity]
     def getUserSetting(telegramid):
         # Get user id
-        userId = Connection.getUserIdByTelegramid(telegramid)
-        if (dbFound)(userId):
-            query = 'select game_type, game_complexity from users where id=%(id)s'
-            ret = Connection.executeQuery(query,{'id':userId})
+        userId = Connection.getUserIdByTelegramid(telegramid=telegramid)
+        if (dbFound)(result=userId):
+            query = 'select game_type, game_complexity, game_speciality from users where id=%(id)s'
+            ret = Connection.executeQuery(query=query,params={'id':userId})
         else:
             ret = userId
         return ret
@@ -519,12 +549,12 @@ class Connection:
     #   id - user id
     #   NOT_FOUND - no such user
     def getUserIdByTelegramid(telegramid):
-        ret = dbLibCheckTelegramid(telegramid)
+        ret = dbLibCheckTelegramid(telegramid=telegramid)
         if (not ret):
             return Connection.NOT_FOUND
         query = f"SELECT id FROM users WHERE telegramid = %(tid)s"
         ret = Connection.executeQuery(query=query,params={'tid':telegramid})
-        if (dbFound(ret)):
+        if (dbFound(result=ret)):
             ret = ret[0]
         return ret
 
@@ -532,17 +562,17 @@ class Connection:
     def deleteUser(userId) -> bool:
         ret = False
         if (not Connection.isInitialized()):
-            log("Cannot delete user - connection is not initialized",LOG_ERROR)
+            log(str="Cannot delete user - connection is not initialized",logLevel=LOG_ERROR)
             return ret
         conn = Connection.getConnection()
         with conn.cursor() as cur:
             query = "DELETE from users where id = %(user)s"
             try:
                 cur.execute(query=query, vars={'user':userId})
-                log(f'Deleted user: {userId}')
+                log(str=f'Deleted user: {userId}')
                 ret = True
             except (Exception, psycopg2.DatabaseError) as error:
-                log(f'Failed delete user {userId}: {error}',LOG_ERROR)
+                log(str=f'Failed delete user {userId}: {error}',logLevel=LOG_ERROR)
         return ret
     
     # Insert new user in DB. 
@@ -561,31 +591,31 @@ class Connection:
         if ((complexity == None) or (not Connection.dbLibCheckGameComplexity(complexity))):
             complexity = Connection.getDefaultComplexity()
 
-        if ((gameType == None) or (not Connection.dbLibCheckGameType(gameType))):
+        if ((gameType == None) or (not Connection.dbLibCheckGameType(game_type=gameType))):
             gameType = Connection.getDefaultGameType()
 
         ret = None
         conn = Connection.getConnection()
         # Check for duplicates
-        retUser = Connection.getUserIdByTelegramid(telegramid)
+        retUser = Connection.getUserIdByTelegramid(telegramid=telegramid)
         if (retUser == None): # error with DB
-            log(f'{fName}: Cannot get user from DB: {telegramid}',LOG_ERROR)
+            log(str=f'{fName}: Cannot get user from DB: {telegramid}',logLevel=LOG_ERROR)
             return None
-        if (dbNotFound(retUser)):
+        if (dbNotFound(result=retUser)):
             with conn.cursor() as cur:
                 query = "INSERT INTO users ( telegramid,game_type,game_complexity ) VALUES ( %(u)s,%(t)s,%(c)s ) returning id"
                 try:
-                    cur.execute(query, {'u':telegramid,'t':gameType,'c':complexity})
+                    cur.execute(query=query, vars={'u':telegramid,'t':gameType,'c':complexity})
                     row = cur.fetchone()
                     if (row):
                         ret = row[0]
-                        log(f'{fName}: Inserted user: {telegramid} - {gameType} - {complexity}')
+                        log(str=f'{fName}: Inserted user: {telegramid} - {gameType} - {complexity}')
                     else:
-                        log(f'{fName}: Cannot get id of new user: {query}',LOG_ERROR)
+                        log(str=f'{fName}: Cannot get id of new user: {query}',logLevel=LOG_ERROR)
                 except (Exception, psycopg2.DatabaseError) as error:
-                    log(f'{fName}: Failed insert user {telegramid}: {error}',LOG_ERROR)
+                    log(str=f'{fName}: Failed insert user {telegramid}: {error}',logLevel=LOG_ERROR)
         else:
-            log(f'{fName}: Trying to insert duplicate user: {telegramid}',LOG_WARNING)
+            log(str=f'{fName}: Trying to insert duplicate user: {telegramid}',logLevel=LOG_WARNING)
             ret = None
         return ret
 
@@ -638,18 +668,18 @@ class Connection:
 
     # Update game type for the userId
     # Returns: True - update successful / False - otherwise
-    def updateUserGameType(telergamid, gameType) -> bool:
+    def updateUserGameType(telegramid, gameType) -> bool:
         fName = Connection.updateUserGameType.__name__
         if (not Connection.isInitialized()):
-            log(f"{fName}: connection is not initialized",LOG_ERROR)
+            log(str=f"{fName}: connection is not initialized",logLevel=LOG_ERROR)
             return False
-        ret = dbLibCheckTelegramid(telegramid=telergamid)
+        ret = dbLibCheckTelegramid(telegramid=telegramid)
         if (not ret):
-            log(f'{fName}: Incorrect user {telergamid} provided',LOG_ERROR)
+            log(str=f'{fName}: Incorrect user {telegramid} provided',logLevel=LOG_ERROR)
             return False
-        userId = Connection.getUserIdByTelegramid(telergamid)
+        userId = Connection.getUserIdByTelegramid(telegramid=telegramid)
         if (dbNotFound(result=userId)):
-            log(f'{fName}: Cannot find user {telergamid}',LOG_ERROR)
+            log(f'{fName}: Cannot find user {telegramid}',LOG_ERROR)
             return False
         if (not Connection.dbLibCheckGameType(game_type=gameType)):
             log(f'{fName}: Wrong game type format: {gameType}',LOG_ERROR)
@@ -661,10 +691,10 @@ class Connection:
             query = 'update users set game_type=%(gt)s where id = %(uId)s'
             try:
                 cur.execute(query,{'gt':gameType,'uId':userId})
-                log(f'Updated game type: (user={telergamid} | gameType = {gameType})')
+                log(f'Updated game type: (user={telegramid} | gameType = {gameType})')
                 ret = True
             except (Exception, psycopg2.DatabaseError) as error:
-                log(f'Failed update game type (gameType = {gameType}, user={telergamid}): {error}',LOG_ERROR)
+                log(str=f'Failed update game type (gameType = {gameType}, user={telegramid}): {error}',logLevel=LOG_ERROR)
         return ret
 
     # Get user complexity
@@ -693,10 +723,10 @@ class Connection:
 
     # Update users complexity for the userId
     # Returns: True - update successful / False - otherwise
-    def updateUserComplexity(telegramid, complexity):
+    def updateUserComplexity(telegramid, complexity) -> bool:
         fName = Connection.updateUserComplexity.__name__
         if (not Connection.isInitialized()):
-            log(f"{fName}: connection is not initialized",LOG_ERROR)
+            log(str=f"{fName}: connection is not initialized",logLevel=LOG_ERROR)
             return False
         ret = dbLibCheckTelegramid(telegramid=telegramid)
         if (not ret):
@@ -704,10 +734,10 @@ class Connection:
             return False
         userId = Connection.getUserIdByTelegramid(telegramid=telegramid)
         if (dbNotFound(result=userId)):
-            log(f'{fName}: Cannot find user {telegramid}',LOG_ERROR)
+            log(str=f'{fName}: Cannot find user {telegramid}',logLevel=LOG_ERROR)
             return False
         if (not Connection.dbLibCheckGameComplexity(game_complexity=complexity)):
-            log(f'{fName}: Wrong complexity format: {complexity}',LOG_ERROR)
+            log(str=f'{fName}: Wrong complexity format: {complexity}',logLevel=LOG_ERROR)
             return False
 
         ret = False
@@ -716,11 +746,71 @@ class Connection:
             query = 'update users set game_complexity=%(c)s where id = %(uId)s'
             try:
                 cur.execute(query,{'c':complexity,'uId':userId})
-                log(f'Updated complexity: (user={telegramid} | complexity = {complexity})')
+                log(str=f'Updated complexity: (user={telegramid} | complexity = {complexity})')
                 ret = True
             except (Exception, psycopg2.DatabaseError) as error:
-                log(f'{fName}: Failed update complexity (complexity = {complexity}, user={telegramid}): {error}')
+                log(str=f'{fName}: Failed update complexity (complexity = {complexity}, user={telegramid}): {error}',logLevel=LOG_ERROR)
         return ret
+
+    # Get user speciality
+    # Returns:
+    #   speciality - speciality
+    #   None - if error
+    def getUserSpeciality(telegramid):
+        fName = Connection.getUserSpeciality.__name__
+        ret = None
+        if (not Connection.isInitialized()):
+            log(str=f"{fName}: connection is not initialized",logLevel=LOG_ERROR)
+            return ret
+        ret2 = dbLibCheckTelegramid(telegramid=telegramid)
+        if (not ret2):
+            log(str=f'{fName}: Incorrect user {telegramid} provided',logLevel=LOG_ERROR)
+            return ret
+        userId = Connection.getUserIdByTelegramid(telegramid=telegramid)
+        if (dbNotFound(result=userId)):
+            log(str=f'{fName}: Cannot find user {telegramid}',logLevel=LOG_ERROR)
+            return ret
+        query = 'select game_speciality from users where id=%(uId)s'
+        ret2 = Connection.executeQuery(query=query,params={'uId':userId})
+        if (dbFound(result=ret2)):
+            ret = ret2[0]
+        return ret
+
+    # Update users speciality for the userId
+    # Returns: True - update successful / False - otherwise
+    def updateUserSpeciality(telegramid, speciality) -> bool:
+        fName = Connection.updateUserSpeciality.__name__
+        if (not Connection.isInitialized()):
+            log(str=f"{fName}: connection is not initialized",logLevel=LOG_ERROR)
+            return False
+        ret = dbLibCheckTelegramid(telegramid=telegramid)
+        if (not ret):
+            log(str=f'{fName}: Incorrect user {telegramid} provided',logLevel=LOG_ERROR)
+            return False
+        userId = Connection.getUserIdByTelegramid(telegramid=telegramid)
+        if (dbNotFound(result=userId)):
+            log(str=f'{fName}: Cannot find user {telegramid}',logLevel=LOG_ERROR)
+            return False
+        if (not Connection.dbLibCheckGameSpeciality(game_speciality=speciality)):
+            log(str=f'{fName}: Wrong speciality format: {speciality}',logLevel=LOG_ERROR)
+            return False
+
+        ret = False
+        conn = Connection.getConnection()
+        with conn.cursor() as cur:
+            query = 'update users set game_speciality=%(s)s where id = %(uId)s'
+            try:
+                cur.execute(query=query,vars={'s':speciality,'uId':userId})
+                log(f'Updated speciality: (user={telegramid} | speciality = {speciality})')
+                ret = True
+            except (Exception, psycopg2.DatabaseError) as error:
+                log(f'{fName}: Failed update speciality (speciality = {speciality}, user={telegramid}): {error}')
+        return ret
+
+    # Clear user speciality for the userId
+    # Returns: True - update successful / False - otherwise
+    def clearUserSpeciality(telegramid) -> bool:
+        return Connection.updateUserSpeciality(telegramid=telegramid, speciality=None)
 
     # Get current game for user userName
     # Returns:
@@ -1104,9 +1194,20 @@ class Connection:
         return False
 
     # Returns 'n' personIDs or None if connection not initialized or issue with DB
-    def getRandomPersonIds(complexity, n = 1):
-        query = "SELECT id FROM persons WHERE (complexity<=%(c)s or complexity is null) ORDER BY RANDOM() LIMIT %(n)s"
-        ret = Connection.executeQuery(query=query,params={'c':complexity, 'n':n},all=True)
+    def getRandomPersonIds(complexity, n = 1, speciality = None):
+        params = {'c':complexity, 'n':n}
+        query2 = ''
+        if (speciality):
+            query2 = ' and speciality=%(s)s'
+            params['s'] = speciality
+            pass
+        query = f'''
+                SELECT id FROM persons
+                WHERE (complexity<=%(c)s or complexity is null)
+                {query2}
+                ORDER BY RANDOM() LIMIT %(n)s
+        '''
+        ret = Connection.executeQuery(query=query,params=params,all=True)
         if (dbFound(result=ret)):
             if (n == 1):
                 ret = ret[0]
@@ -1132,7 +1233,7 @@ class Connection:
         return ret
 
     # Returns 'n' imageIds or None if connection not initialized or issue with DB
-    def getRandomImageIdsOfOtherPersons(personId, complexity, n, range = (None, None)):
+    def getRandomImageIdsOfOtherPersons(personId, complexity, n, range = (None, None), speciality=None):
         fName = Connection.getRandomImageIdsOfOtherPersons.__name__
         if ((len(range) != 2)):
             log(str=f'{fName}: Wrong range format provided: {range}',logLevel=LOG_ERROR)
@@ -1152,7 +1253,10 @@ class Connection:
         gender = personInfo['gender']
         if (gender):
             query2 = query2 + ' and p.gender = %(gen)s'
-            params['gen']=gender
+            params['gen'] = gender
+        if (speciality):
+            query2 = query2 + ' and p.speciality = %(spec)s'
+            params['spec'] = speciality
         query = f'''
             SELECT i.id FROM images as i join persons as p on i.person=p.id
             where i.person!=%(p)s and (p.complexity<=%(com)s or p.complexity is null)
@@ -1231,7 +1335,7 @@ class Connection:
         # Check for duplicates
         retPerson = Connection.getPersonIdByName(person=personName)
         if (retPerson == None): # error with DB
-            log(f'{fName}: Cannot get person from DB: {personName}',LOG_ERROR)
+            log(str=f'{fName}: Cannot get person from DB: {personName}',logLevel=LOG_ERROR)
             return None
         if (dbNotFound(result=retPerson)):
             conn = Connection.getConnection()
@@ -1242,13 +1346,13 @@ class Connection:
                     row = cur.fetchone()
                     if (row):
                         ret = row[0]
-                        log(f'{fName}: Inserted person: {personName}')
+                        log(str=f'{fName}: Inserted person: {personName}')
                     else:
-                        log(f'{fName}: Cannot get id of new person: {query}',LOG_ERROR)
+                        log(str=f'{fName}: Cannot get id of new person: {query}',logLevel=LOG_ERROR)
                 except (Exception, psycopg2.DatabaseError) as error:
-                    log(f'Failed insert person {personName}: {error}',LOG_ERROR)
+                    log(str=f'Failed insert person {personName}: {error}',logLevel=LOG_ERROR)
         else:
-            log(f'Trying to insert duplicate person: {personName}',LOG_WARNING)
+            log(str=f'Trying to insert duplicate person: {personName}',logLevel=LOG_WARNING)
         return ret
 
     # Returns:
@@ -1323,10 +1427,18 @@ class Connection:
             ret = retArr
         return ret
 
+    # Get speciality id by text
+    def getSpecialityIdByText(specialityTxt):
+        specialities = Connection.getSpecialities()
+        for speciality in specialities:
+            if (speciality[1] == specialityTxt):
+                return speciality[0]
+        return None
+
     # Update persons info from CSV file
     def updatePersonsFromCSV() -> None:
         fName = Connection.updatePersonsFromCSV.__name__
-        persons = readPersonCSV()
+        persons = readPersonsCSV()
         if (not persons):
             log(str=f'{fName}: No persons for update',logLevel=LOG_ERROR)
             return
@@ -1460,7 +1572,7 @@ class Connection:
     # Update DB - remove non existing persons and images
     def updateDB2(persons, names, years, intYears) -> None:
         if (not Connection.isInitialized()):
-            log("Cannot updateDB - connection is not initialized", LOG_ERROR)
+            log(str="Cannot updateDB - connection is not initialized", logLevel=LOG_ERROR)
             return
         Connection.bulkPersonsDelete(persons=persons)
         mPersons = Connection.getImagePersonMap(persons=persons, names=names, years=years, intYears=intYears)

@@ -102,8 +102,8 @@ def readCSV(fileName):
             data.append(dataItem)
     return data
 
-def readPersonCSV():
-    fName = readPersonCSV.__name__
+def readPersonsCSV():
+    fName = readPersonsCSV.__name__
     persons = readCSV(fileName=PERSONS_FILE_CVS)
     resPersons = []
     # Check and transform
@@ -141,7 +141,10 @@ def readPersonCSV():
         newPerson['complexity'] = complexity
         speciality = None
         if (person.get('speciality')):
-            speciality = int(person.get('speciality'))
+            try:
+                speciality = int(person.get('speciality'))
+            except:
+                log(str=f'{fName}: Speciality is not int for person {personName}: {speciality}',logLevel=LOG_WARNING)
         newPerson['speciality'] = speciality
         resPersons.append(newPerson)
     return resPersons

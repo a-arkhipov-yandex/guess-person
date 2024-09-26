@@ -83,13 +83,14 @@ def bulkUpload(persons, names, years) -> None:
 
 def removeNonExistingFilesOnS3() -> None:
     imgsInBucket = getImgsInBucket()
-
+    filesInDir = getFilesInImageDir()
     # Go through all files in bucket
     for img in imgsInBucket:
         # Check if file exist
-        fullpath = buildImgPathName(imgName=img)
-        if (not path.exists(path=fullpath)):
-            pass
+        #fullpath = buildImgPathName(imgName=img)
+        # Replace '.JPG' with '.jpg'
+        newImg = img.replace('.JPG', '.jpg')
+        if (newImg not in filesInDir):
             # remove it from s3
             log(str=f"Deleting {img} ...")
             ret = deleteImg(imgName=img)

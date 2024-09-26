@@ -14,20 +14,20 @@ ENV_BOTTOKENTEST = 'BOTTOKENTEST'
 ENV_TESTDB = 'TESTDB'
 ENV_TESTBOT = 'TESTBOT'
 
-VERSION = '1.0'
-
-TITLETEXT_SEPARATOR = '@@@'
+VERSION = '2.0'
 
 CMD_START = '/start'
 CMD_HELP = '/help'
 CMD_SETTINGS = '/settings'
 
+CALLBACK_GAMETYPE_TAG = 'gametype:'
 CALLBACK_COMPLEXITY_TAG = 'complexity:'
+CALLBACK_SPECIALITY_TAG = 'speciality:'
 CALLBACK_TYPE1_TAG = 'type1answer:'
 CALLBACK_TYPE2_TAG = 'type2answer:'
-CALLBACK_GAMETYPE_TAG = 'gametype:'
 
-DEFAULT_ERROR_MESSAGE = 'Произошла ошибка. Попробуйте позже.'
+
+DEFAULT_ERROR_MESSAGE = '\U00002757 Произошла ошибка. Попробуйте позже.'
 
 PERSONS_IN_TYPE2_ANSWER = 5
 
@@ -72,11 +72,15 @@ class GuessPersonBot:
             func=lambda message: re.match(pattern=fr'^{CALLBACK_COMPLEXITY_TAG}\d+$', string=message.data)
         )
         GuessPersonBot.__bot.register_callback_query_handler(
+            callback=self.specialityHandler,
+            func=lambda message: re.match(pattern=fr'^{CALLBACK_SPECIALITY_TAG}\d+$', string=message.data)
+        )
+        GuessPersonBot.__bot.register_callback_query_handler(
             callback=self.gameTypeHandler,
             func=lambda message: re.match(pattern=fr'^{CALLBACK_GAMETYPE_TAG}\d+$', string=message.data)
         )
         GuessPersonBot.__bot.register_callback_query_handler(
-            callback=self.cmdStartHandler,
+            callback=self.startGameHandler,
             func=lambda message: re.match(pattern=fr'^{CMD_START}$', string=message.data)
         )
         GuessPersonBot.__bot.register_callback_query_handler(
@@ -103,7 +107,7 @@ class GuessPersonBot:
         if (not botToken):
             log(str=f'Cannot read ENV vars: botToken={botToken}', logLevel=LOG_ERROR)
             return False
-        log(f'Bot initialized successfully (test={isTest})')
+        log(str=f'Bot initialized successfully (test={isTest})')
         GuessPersonBot.__bot = telebot.TeleBot(token=botToken)
         self.registerHandlers()
         return True
@@ -194,10 +198,6 @@ class GuessPersonBot:
             return ret.message_id
         return None
 
-    def cmdStartHandler(self, message:types.Message) -> None:
-        telegramid = message.from_user.id
-        self.startNewGame(telegramid=telegramid)
-
     # /settings cmd handler
     def cmdSettingsHandler(self, message: types.Message) -> None:
         self.requestComplexity(telegramid=message.from_user.id)
@@ -267,19 +267,70 @@ class GuessPersonBot:
         # Request Game Type setting
         self.requestGameType(telegramid=telegramid)
 
+    def requestSpeciality(self, telegramid) -> None:
+        specialities = Connection.getSpecialitiesToShow()
+        # Request game speciality
+        keyboard = types.InlineKeyboardMarkup()
+        for c in specialities:
+            key = types.InlineKeyboardButton(text=c[1], callback_data=f'{CALLBACK_SPECIALITY_TAG}{c[0]}')
+            keyboard.add(key)
+        # Add clear game type
+        key = types.InlineKeyboardButton(text="\U00002733 Любой", callback_data=f'{CALLBACK_SPECIALITY_TAG}0')
+        keyboard.add(key)
+        question = 'Выберите вид дейятельности для вопросов:'
+        self.bot.send_message(chat_id=telegramid, text=question, reply_markup=keyboard)
+
+    def specialityHandler(self, message: types.CallbackQuery) -> None:
+        fName = self.specialityHandler.__name__
+        telegramid = message.from_user.id
+        log(str=f'{fName}: Speciality handler invoked for user {telegramid}: "{message.data}"',logLevel=LOG_DEBUG)
+        self.bot.answer_callback_query(callback_query_id=message.id)
+        if (not self.checkUser(telegramid=telegramid)):
+            log(str=f'{fName}: Unknown user {telegramid} provided',logLevel=LOG_ERROR)
+            self.sendMessage(telegramid=telegramid, text=DEFAULT_ERROR_MESSAGE)
+            return
+        try:
+            speciality = int(message.data.split(sep=':')[1])
+        except:
+            log(str=f'{fName}: Speciality is not int: {message.data}',logLevel=LOG_ERROR)
+            self.sendMessage(telegramid=telegramid, text='Нет такого вида деятельности. Попробуйте еще раз.')
+            self.requestComplexity(telegramid=telegramid)
+            return
+        if (speciality == 0): # Clear speciality
+            ret = Connection.clearUserSpeciality(telegramid=telegramid)
+        else:
+            if (not Connection.dbLibCheckGameSpeciality(game_speciality=speciality)):
+                self.sendMessage(telegramid=telegramid, text='Нет такого вида деятельности. Попробуйте еще раз.')
+                self.requestComplexity(telegramid=telegramid)
+                return
+            # Set speciality for the user
+            ret = Connection.updateUserSpeciality(telegramid=telegramid, speciality=speciality)
+        if (not ret):
+            self.sendMessage(telegramid=telegramid, text=DEFAULT_ERROR_MESSAGE)
+            return
+        # Success message
+        self.sendMessage(telegramid=telegramid, text='Настройки изменены успешно! \U00002705')
+        key1 = types.InlineKeyboardButton(text='\U0001F4AA Начать новую игру', callback_data=CMD_START)
+        key2= types.InlineKeyboardButton(text='\U0001F506 Выбрать другой тип игры/сложность', callback_data=CMD_SETTINGS)
+        keyboard = types.InlineKeyboardMarkup()
+        keyboard.add(key1)
+        keyboard.add(key2)
+        question = 'Что дальше?'
+        self.bot.send_message(chat_id=telegramid, text=question, reply_markup=keyboard)
+
     # Request new GameType
     def requestGameType(self, telegramid) -> None:
         fName = self.requestGameType.__name__
         if (not self.checkUser(telegramid=telegramid)):
-            log(f'{fName}: Unknown user {telegramid} provided',LOG_ERROR)
+            log(str=f'{fName}: Unknown user {telegramid} provided',logLevel=LOG_ERROR)
             self.sendMessage(telegramid=telegramid, text=DEFAULT_ERROR_MESSAGE)
             return
         # Get game type
         game_types = Connection.getGameTypes()
         # Request game type
-        keyboard = types.InlineKeyboardMarkup(); # keyboard
+        keyboard = types.InlineKeyboardMarkup()
         for gameType in game_types:
-            key = types.InlineKeyboardButton(text=gameType[1], callback_data=f'{CALLBACK_GAMETYPE_TAG}{gameType[0]}')
+            key = types.InlineKeyboardButton(text=f"{gameType[1]}", callback_data=f'{CALLBACK_GAMETYPE_TAG}{gameType[0]}')
             keyboard.add(key)
         question = 'Выберите тип игры:'
         self.bot.send_message(chat_id=telegramid, text=question, reply_markup=keyboard)
@@ -290,7 +341,7 @@ class GuessPersonBot:
         self.bot.answer_callback_query(callback_query_id=message.id)
         log(str=f'{fName}: Game type handler invoked for user {telegramid}: "{message.data}"',logLevel=LOG_DEBUG)
         if (not self.checkUser(telegramid=telegramid)):
-            log(f'{fName}: Unknown user {telegramid} provided',LOG_ERROR)
+            log(str=f'{fName}: Unknown user {telegramid} provided',logLevel=LOG_ERROR)
             self.sendMessage(telegramid=telegramid, text=DEFAULT_ERROR_MESSAGE)
             return
         gameType = int(message.data.split(sep=':')[1])
@@ -299,19 +350,17 @@ class GuessPersonBot:
             self.requestGameType(message=message)
             return
         # Set game type for the user
-        ret = Connection.updateUserGameType(telergamid=telegramid, gameType=gameType)
+        ret = Connection.updateUserGameType(telegramid=telegramid, gameType=gameType)
         if (not ret):
             self.sendMessage(telegramid=telegramid, text=DEFAULT_ERROR_MESSAGE)
             return
-        # Success message
-        self.sendMessage(telegramid=telegramid, text='Настройки изменены успешно!')
-        key1 = types.InlineKeyboardButton(text='Начать новую игру', callback_data=CMD_START)
-        key2= types.InlineKeyboardButton(text='Выбрать другой тип игры/сложность', callback_data=CMD_SETTINGS)
-        keyboard = types.InlineKeyboardMarkup(); # keyboard
-        keyboard.add(key1)
-        keyboard.add(key2)
-        question = 'Что дальше?'
-        self.bot.send_message(chat_id=telegramid, text=question, reply_markup=keyboard)
+        # Request Speciality setting
+        self.requestSpeciality(telegramid=telegramid)
+
+    def startGameHandler(self, message: types.CallbackQuery) -> None:
+        telegramid = message.from_user.id
+        self.bot.answer_callback_query(callback_query_id=message.id)
+        self.startNewGame(telegramid=telegramid)
 
     def startNewGame(self, telegramid) -> None:
         fName = self.startNewGame.__name__
@@ -323,11 +372,13 @@ class GuessPersonBot:
         # Get game type and complexity
         gameType = Connection.getUserGameType(telegramid=telegramid)
         complexity = Connection.getUserComplexity(telegramid=telegramid)
+        speciality = Connection.getUserSpeciality(telegramid=telegramid)
         # Generate new game for the complexity
         params={
             'telegramid':telegramid,
             'type':gameType,
-            'complexity':complexity
+            'complexity':complexity,
+            'speciality':speciality
         }
         gameId = guess_game.generateNewGame(queryParams=params)
         self.showQuestion(telegramid=telegramid, type=gameType, gameId=gameId)
