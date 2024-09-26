@@ -14,7 +14,7 @@ ENV_BOTTOKENTEST = 'BOTTOKENTEST'
 ENV_TESTDB = 'TESTDB'
 ENV_TESTBOT = 'TESTBOT'
 
-VERSION = '2.0'
+VERSION = '2.1'
 
 CMD_START = '/start'
 CMD_HELP = '/help'
@@ -25,7 +25,9 @@ CALLBACK_COMPLEXITY_TAG = 'complexity:'
 CALLBACK_SPECIALITY_TAG = 'speciality:'
 CALLBACK_TYPE1_TAG = 'type1answer:'
 CALLBACK_TYPE2_TAG = 'type2answer:'
+CALLBACK_TYPE3CANCEL_TAG = 'type2answercancel:'
 
+I_DONT_KNOW_ANSWERR = "!!!Idontknow!!!"
 
 DEFAULT_ERROR_MESSAGE = '\U00002757 Произошла ошибка. Попробуйте позже.'
 
@@ -95,6 +97,10 @@ class GuessPersonBot:
             callback=self.answerHandlerType2,
             func=lambda message: re.match(pattern=fr'^{CALLBACK_TYPE2_TAG}\d+$', string=message.data)
         )
+        GuessPersonBot.__bot.register_callback_query_handler(
+            callback=self.answerHandlerType3Cancel,
+            func=lambda message: re.match(pattern=fr'^{CALLBACK_TYPE3CANCEL_TAG}$', string=message.data)
+        )
 
     def initBot(self) -> bool:
         # Check if bot is already initialized
@@ -154,7 +160,8 @@ class GuessPersonBot:
                 return self.cmdHandler(message=message)
                 # Check if this is an answer to the game type 3
             elif (self.checkGameTypeNInProgress(telegramid=telegramid, gameType=3)):
-                return self.answerHandlerType3(message=message)
+                text = message.text
+                return self.answerHandlerType3(telegramid=telegramid, text=text)
         help = self.getHelpMessage(username=username)
         self.sendMessage(telegramid=telegramid, text=f"Я вас не понимаю:(/n{help}")
 
@@ -500,7 +507,13 @@ class GuessPersonBot:
                 keyboard.add(key)
             self.bot.send_message(chat_id=telegramid, text=textQuestion, reply_markup=keyboard)
         else: # game type == 3
-            self.sendMessage(telegramid=telegramid, text=textQuestion)
+            # Show cancel button
+            keyboard = types.InlineKeyboardMarkup()
+            data = f'{CALLBACK_TYPE3CANCEL_TAG}'
+            key = types.InlineKeyboardButton(text='\U0001F937 Я не знаю ответ:(', callback_data=data)
+            keyboard.add(key)
+            text = f'{textQuestion} (введите ответ в поле ввода)'
+            self.bot.send_message(chat_id=telegramid, text=text, reply_markup=keyboard)
 
     def showQuestionType3(self,telegramid, gameId) -> None:
         fName = self.showQuestionType3.__name__
@@ -656,9 +669,8 @@ class GuessPersonBot:
             log(str=f'{fName}: Cannot get person data from DB: {correctAnswerId}',logLevel=LOG_ERROR)
             self.sendMessage(telegramid=telegramid, text=DEFAULT_ERROR_MESSAGE)
 
-    def answerHandlerType3(self, message: types.Message) -> None:
+    def answerHandlerType3(self, telegramid, text) -> None:
         fName = self.answerHandlerType3.__name__
-        telegramid = message.from_user.id
         if (not self.checkUser(telegramid=telegramid)):
             log(str=f'{fName}: Unknown user {telegramid} provided',logLevel=LOG_ERROR)
             self.sendMessage(telegramid=telegramid, text=DEFAULT_ERROR_MESSAGE)
@@ -670,7 +682,7 @@ class GuessPersonBot:
             self.sendMessage(telegramid=telegramid, text=f'Нет запущенных игр. Введите "{CMD_START}" чтобы начать новую.')
             return
         # User answer
-        personName = message.text
+        personName = text
         # Get game info
         gameInfo = Connection.getGameInfoById(gameId=gameId)
         # Get correct answer - personId from DB
@@ -679,8 +691,11 @@ class GuessPersonBot:
         if (dbFound(result=personInfo)):
             correctAnswer = personInfo['name']
             answer = 0
-            if (self.checkAnswerGameType3(userPersonName=personName, correctPersonName=correctAnswer)):
-                answer = correctAnswerId # User is correct
+            dont_know = True
+            if (personName != I_DONT_KNOW_ANSWERR):
+                dont_know = False
+                if (self.checkAnswerGameType3(userPersonName=personName, correctPersonName=correctAnswer)):
+                    answer = correctAnswerId # User is correct
             # Modify photo capture
             self.modifyPhotoCapture(telegramid=telegramid)
             # Finish game and return result
@@ -690,10 +705,20 @@ class GuessPersonBot:
             result = gameInfo['result']
             correctMessage = f'Это - {correctAnswer}.'
             self.showGameResult(telegramid=telegramid, result=result,
-                                correctAnswer=correctAnswer, correctMessage=correctMessage)
+                                correctAnswer=correctAnswer, correctMessage=correctMessage, dont_know=dont_know)
         else:
             log(str=f'{fName}: Cannot get person data from DB: {correctAnswerId}',logLevel=LOG_ERROR)
             self.sendMessage(telegramid=telegramid, text=DEFAULT_ERROR_MESSAGE)
+
+    def answerHandlerType3Cancel(self, message: types.CallbackQuery) -> None:
+        fName = self.answerHandlerType3Cancel.__name__
+        telegramid = message.from_user.id
+        self.bot.answer_callback_query(callback_query_id=message.id)
+        if (not self.checkUser(telegramid=telegramid)):
+            log(str=f'{fName}: Unknown user {telegramid} provided',logLevel=LOG_ERROR)
+            self.sendMessage(telegramid=telegramid, text=DEFAULT_ERROR_MESSAGE)
+            return
+        self.answerHandlerType3(telegramid=telegramid, text=I_DONT_KNOW_ANSWERR)
 
     # Modify previous photo capture
     def modifyPhotoCapture(self, telegramid) -> None:
@@ -723,7 +748,7 @@ class GuessPersonBot:
         return ret
     
     # Show game result
-    def showGameResult(self, telegramid, result, correctAnswer, correctMessage='', correctAnswerNum=None) -> None:
+    def showGameResult(self, telegramid, result, correctAnswer, correctMessage='', correctAnswerNum=None, dont_know=False) -> None:
         # Check result
         correctAnswerTxt = ''
         if (correctAnswerNum):
@@ -735,7 +760,11 @@ class GuessPersonBot:
             correctAnswerTxt = ''
             if (correctAnswerNum):
                 correctAnswerTxt = f' под номером {correctAnswerNum}'
-            self.sendMessage(telegramid=telegramid, text=f'\U0000274C А вот и не верно. Верный ответ{correctAnswerTxt}: "{correctAnswer}"')
+            reply_end = f'Верный ответ{correctAnswerTxt}: "{correctAnswer}"'
+            reply_start = f'\U0000274C А вот и не верно.'
+            if (dont_know):
+                reply_start = f'\U0001F9E0 Теперь будете знать.'                
+            self.sendMessage(telegramid=telegramid, text=f'{reply_start} {reply_end}')
         self.sendAfterAnswer(telegramid=telegramid)
 
     # Check answer for game type 3
