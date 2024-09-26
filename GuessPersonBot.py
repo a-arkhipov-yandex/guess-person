@@ -517,8 +517,8 @@ class GuessPersonBot:
             log(str=f'{fName}: Unknown user {telegramid} provided',logLevel=LOG_ERROR)
             self.sendMessage(telegramid=telegramid, text=DEFAULT_ERROR_MESSAGE)
             return
-        key1 = types.InlineKeyboardButton(text='Сыграть еще раз', callback_data=CMD_START)
-        key2= types.InlineKeyboardButton(text='Выбрать другой тип игры/сложность', callback_data=CMD_SETTINGS)
+        key1 = types.InlineKeyboardButton(text='\U0001F4AA Сыграть еще раз', callback_data=CMD_START)
+        key2= types.InlineKeyboardButton(text='\U0001F506 Выбрать другой тип игры/сложность', callback_data=CMD_SETTINGS)
         keyboard = types.InlineKeyboardMarkup()
         keyboard.add(key1)
         keyboard.add(key2)
@@ -730,12 +730,12 @@ class GuessPersonBot:
             correctAnswerTxt = f' под номером {correctAnswerNum}'
         if (result):
             # Answer is correct
-            self.sendMessage(telegramid=telegramid, text=f'Поздравляю! Вы ответили верно. {correctMessage}{correctAnswerTxt}')
+            self.sendMessage(telegramid=telegramid, text=f'\U00002705 Поздравляю! Вы ответили верно. {correctMessage}{correctAnswerTxt}')
         else:
             correctAnswerTxt = ''
             if (correctAnswerNum):
                 correctAnswerTxt = f' под номером {correctAnswerNum}'
-            self.sendMessage(telegramid=telegramid, text=f'А вот и не верно. Верный ответ{correctAnswerTxt}: "{correctAnswer}"')
+            self.sendMessage(telegramid=telegramid, text=f'\U0000274C А вот и не верно. Верный ответ{correctAnswerTxt}: "{correctAnswer}"')
         self.sendAfterAnswer(telegramid=telegramid)
 
     # Check answer for game type 3
@@ -749,14 +749,14 @@ class GuessPersonBot:
 
         # 0. Full match
         if (userPersonName == correctPersonName):
-            log(f'Full match: {userPersonName} == {correctPersonName}',LOG_DEBUG)
+            log(str=f'Full match: {userPersonName} == {correctPersonName}',logLevel=LOG_DEBUG)
             return True
 
         lU = len(userPersonName)
         lC = len(correctPersonName)
         # 2. Check length of userAnswer
         if (lU > lC+2):
-            log(f'User len > correct len: {lU} > {lC}+2',LOG_DEBUG)
+            log(str=f'User len > correct len: {lU} > {lC}+2',logLevel=LOG_DEBUG)
             return False
         
         # 3. Check if only one word in answer (probably last name)
@@ -769,7 +769,7 @@ class GuessPersonBot:
             # If correct last word len < 3 - only exact answer
             if (len(correctAnswerLastWord) <= 3):
                 if (userAnswerLastWord == correctAnswerLastWord):
-                    log(f'Full last word match (len <=3): {userAnswerLastWord} == {correctAnswerLastWord}',LOG_DEBUG)
+                    log(str=f'Full last word match (len <=3): {userAnswerLastWord} == {correctAnswerLastWord}',logLevel=LOG_DEBUG)
                     return True
             else:
                 # Check len difference
@@ -777,22 +777,26 @@ class GuessPersonBot:
                 lClw = len(correctAnswerLastWord)
                 if (abs(lAlw-lClw) <= 2):
                     # Check similarity for last name
-                    ret = isStrSimilar(userAnswerLastWord, correctAnswerLastWord)
+                    ret = isStrSimilar(str1=userAnswerLastWord, str2=correctAnswerLastWord)
                     if (ret):
-                        log(f'Last word similarity match (similarity={ret}): {userAnswerLastWord} | {correctAnswerLastWord}',LOG_DEBUG)
+                        log(str=f'Last word similarity match: {userAnswerLastWord} | {correctAnswerLastWord}',logLevel=LOG_DEBUG)
                         return True
+                    else:
+                        log(str=f'Last word is not similar): {userAnswerLastWord} | {correctAnswerLastWord}',logLevel=LOG_DEBUG)                        
 
         if (lU > 5):
             correctAnswer = correctPersonName[-lU:]
-            ret = isStrSimilar(userPersonName, correctAnswer)
+            ret = isStrSimilar(str1=userPersonName, str2=correctAnswer)
             if (ret):
-                log(f'Last part of answer similarity (similarity={ret}): {userPersonName} | {correctAnswer}',LOG_DEBUG)
+                log(str=f'Last part of answer similarity): {userPersonName} | {correctAnswer}',logLevel=LOG_DEBUG)
                 return True
+            else:
+                log(str=f'Last part of is not similar): {userPersonName} | {correctAnswer}',logLevel=LOG_DEBUG)                
 
         # 4. Check Levenstein similarity for full answer
-        ret = isStrSimilar(userPersonName, correctPersonName)
+        ret = isStrSimilar(str1=userPersonName, str2=correctPersonName)
         if (ret):
-            log(f'Full answer similarity (similarity={ret}: {userPersonName} | {correctPersonName}',LOG_DEBUG)
+            log(str=f'Full answer similarity: {userPersonName} | {correctPersonName}',logLevel=LOG_DEBUG)
             return True
 
         return ret

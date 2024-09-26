@@ -264,11 +264,11 @@ class guess_game:
                 if (dbFound(result=creatorInfo)):
                     if (dbIsWoman(gender=creatorInfo['gender'])):
                         writeForm = 'а'
-                textQ = f"На какой картинке изображен{writeForm} \"{imageInfo['personName']}\"?"
+                textQ = f"\U00002753 На какой картинке изображен{writeForm} \"{imageInfo['personName']}\"?"
         elif (gameType == 2 or gameType == 3):
             imageInfo = Connection.getImageInfoById(imageId=gameInfo['question'])
             if (dbFound(result=imageInfo)):
-                textQ = f"Чье это изображение?"
+                textQ = f"\U00002753 Чье это изображение?"
         else: # wrong type
             log(f'{fName}: Unkown game type provided: {gameType}',LOG_WARNING)
         return textQ
