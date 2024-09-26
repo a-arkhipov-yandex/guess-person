@@ -29,9 +29,20 @@ class TestDB:
         isInit2 = Connection.isInitialized()
         # Create test user
         TestDB.testUserId1 = Connection.insertUser(telegramid=TestDB.testUserTelegramId1) # fake telegramid
-        (game_type, game_complexity) = Connection.getUserSetting(telegramid=TestDB.testUserTelegramId1)
+        (game_type, game_complexity,game_speciality) = Connection.getUserSetting(telegramid=TestDB.testUserTelegramId1)
         assert(game_type == DEFAULT_GAMETYPE)
         assert(game_complexity == DEFAULT_GAMECOMPLEXITY)
+        assert(game_speciality == None)
+        Connection.updateUserSpeciality(telegramid=TestDB.testUserTelegramId1, speciality=1)
+        Connection.updateUserComplexity(telegramid=TestDB.testUserTelegramId1, complexity=2)
+        Connection.updateUserGameType(telegramid=TestDB.testUserTelegramId1, gameType=3)
+        (game_type, game_complexity,game_speciality) = Connection.getUserSetting(telegramid=TestDB.testUserTelegramId1)
+        assert(game_type == 3)
+        assert(game_complexity == 2)
+        assert(game_speciality == 1)
+        Connection.clearUserSpeciality(telegramid=TestDB.testUserTelegramId1)
+        (game_type, game_complexity,game_speciality) = Connection.getUserSetting(telegramid=TestDB.testUserTelegramId1)
+        assert(game_speciality == None)
         assert(len(Connection.getComplexities()) > 0)
         assert(len(Connection.getGameTypes()) > 0)
         assert(len(Connection.getImageTypes()) > 0)
@@ -149,6 +160,18 @@ class TestDB:
         ret = Connection.dbLibCheckGameComplexity(game_complexity=len(gameComplexity)+1)
         assert(ret == False)
         ret = Connection.dbLibCheckGameComplexity(game_complexity="dfdf")
+        assert(ret == False)
+
+    # Test dbLibCheckGameComplexity()
+    def testdbLibCheckGameSpeciality(self) -> None:
+        gameSpeciality = Connection.getSpecialities()
+        ret = Connection.dbLibCheckGameSpeciality(game_speciality=0)
+        assert(ret == False)
+        ret = Connection.dbLibCheckGameSpeciality(game_speciality=len(gameSpeciality))
+        assert(ret == True)
+        ret = Connection.dbLibCheckGameSpeciality(game_speciality=len(gameSpeciality)+1)
+        assert(ret == False)
+        ret = Connection.dbLibCheckGameSpeciality(game_speciality="dfdf")
         assert(ret == False)
 
     def testPersonsAndImageCreation(self) -> None:
