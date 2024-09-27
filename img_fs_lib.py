@@ -1,10 +1,13 @@
 from os import listdir, path, rename
 from log_lib import *
 from PIL import Image
+from guess_common_lib import *
 
 # TODO: change this
 #IMAGE_DIR = "/Users/a-arkhipov/Yandex.Disk.localized/Images/Личности/"
 IMAGE_DIR = "/Users/a-arkhipov/Downloads/Личности/"
+
+DEFAILT_SAVE_IMAGE_DIR = "/Users/a-arkhipov/Downloads/SavedBotImages/"
 
 MAX_FILESIZE_KB = 256
 
@@ -52,7 +55,7 @@ def getYear(rawYear):
     retYear = 0
     if (rawYear == '0'):
         return 0
-    year = removeYearSigns(rawYear)
+    year = removeYearSigns(rawYear=rawYear)
     if (year == None):
         return None
     if year[-1] == 'е':
@@ -60,25 +63,25 @@ def getYear(rawYear):
     lYear = len(year)
     if (lYear == 4):
         # Check that this is real year
-        retYear = myInt(year)
+        retYear = myInt(str=year)
         if not retYear:
-            log(f'{fName}: Problem with int conversion - {year}',LOG_ERROR)
+            log(str=f'{fName}: Problem with int conversion - {year}',logLevel=LOG_ERROR)
             return None
     elif (lYear == 9):
         years = year.split('-')
         if (len(years) != 2):
-            log(f'{fName}: Cannot split years - {year}',LOG_ERROR)
+            log(str=f'{fName}: Cannot split years - {year}',logLevel=LOG_ERROR)
             return None
-        year1 = myInt(years[0])
-        year2 = myInt(years[1])
+        year1 = myInt(str=years[0])
+        year2 = myInt(str=years[1])
         if ((not year1) or (not year2)):
-            log(f'{fName}: Problem with int conversion 2 - {year}',LOG_ERROR)
+            log(str=f'{fName}: Problem with int conversion 2 - {year}',logLevel=LOG_ERROR)
             return None
         retYear = int((year2+year1)/2) # return average
     
     if ((retYear < 1000) or (retYear > 2030)):
-        log(f'{fName}: Year is out of range: {rawYear}',LOG_ERROR)
-        retYear = 0
+        log(str=f'{fName}: Year is out of range: {rawYear}',logLevel=LOG_ERROR)
+        retYear = None
     return retYear 
 
 # Get all images in directory
@@ -87,19 +90,13 @@ def getImgs():
     files = []
     for f in listdir(path=IMAGE_DIR):
         #log(str=fr'{fName}: Handling file "{f}"', logLevel=LOG_DEBUG)
-        # Check file size
-        filesizeKB = int(path.getsize(filename=f'{IMAGE_DIR}/{f}')/1024)
-        if (filesizeKB > MAX_FILESIZE_KB):
-            log(str=fr'{fName}: File "{f}" is to large: {filesizeKB} KB', logLevel=LOG_WARNING)
-            continue
-
         f1 = f[:-4]
         # Skip '.DS_S'
         if f1 != '.DS_S':
             # Remove '.jpg'
             ff = f[-4:]
-            if (ff != '.jpg'):
-                log(str=f'Is not .jpg: {f}',logLevel=LOG_WARNING)
+            if (ff != LOCAL_EXT):
+                log(str=f'Extension is not {LOCAL_EXT}: {f}',logLevel=LOG_WARNING)
                 continue
             # Check for \xa0 symbol
             if ('\xa0' in f1):
@@ -116,35 +113,84 @@ def getImgs():
     years = []
     intYears = []
     for f in files:
-        tmp = f.split(" - ")
-        lTmp = len(tmp)
-        if lTmp < 2 or lTmp > 3:
-            log(f"{fName}: Wrong numer of items: {f} - {lTmp}", LOG_ERROR)
-            continue
-        person = tmp[0].strip()
-        if person != tmp[0]:
-            log(f'{fName}: Spaces in person {tmp}',LOG_WARNING)
-        persons.append(person)
-        title = tmp[1].strip()
-        if title != tmp[1]:
-            log(f'{fName}: Spaces in name {tmp}',LOG_WARNING)
-        names.append(title)
-
-        year = '0'
-        if (lTmp == 3): # There is year in file name
-            year = tmp[2].strip()
-            if year != tmp[2]:
-                log(f'{fName}: Spaces in year {tmp}', LOG_WARNING)
-        years.append(year)
-
-        intYear = getYear(year)
-        if (intYear == None):
-            log(f'{fName}: Cannot get int year: "{tmp}"', LOG_ERROR)
-            intYear = 0
-        intYears.append(intYear)
+        ret = parsePersonAndImage(info=f)
+        if (ret):
+            persons.append(ret[0])
+            names.append(ret[1])
+            years.append(ret[2])
+            intYears.append(ret[3])
 
     return [persons, names, years, intYears]
  
+def parsePersonAndImage(info) -> list:
+    fName = parsePersonAndImage.__name__
+    ret = []
+    tmp = info.split(" - ")
+    lTmp = len(tmp)
+    if lTmp < 2 or lTmp > 3:
+        log(str=f"{fName}: Wrong numer of items: {info} - {lTmp}", logLevel=LOG_ERROR)
+        return []
+    person = tmp[0].strip()
+    if person != tmp[0]:
+        log(str=f'{fName}: Spaces in person {tmp}',logLevel=LOG_WARNING)
+        return []
+    ret.append(person)
+    title = tmp[1].strip()
+    if title != tmp[1]:
+        log(str=f'{fName}: Spaces in name {tmp}',logLevel=LOG_WARNING)
+        return []
+    ret.append(title)
+    year = '0'
+    if (lTmp == 3): # There is year in file name
+        year = tmp[2].strip()
+        if year != tmp[2]:
+            log(str=f'{fName}: Spaces in year {tmp}', logLevel=LOG_ERROR)
+            return []
+    ret.append(year)
+    intYear = getYear(rawYear=year)
+    if (intYear == None):
+        log(str=f'{fName}: Cannot get int year: "{tmp}"', logLevel=LOG_ERROR)
+        return []
+    ret.append(intYear)
+    return ret
+
+def parsePersonAndImage2(info) -> list:
+    fName = parsePersonAndImage2.__name__
+    ret = []
+    tmp = info.split(" - ")
+    lTmp = len(tmp)
+    if lTmp < 1 or lTmp > 3:
+        log(str=f"{fName}: Wrong numer of items: {info} - {lTmp}", logLevel=LOG_ERROR)
+        return []
+    person = tmp[0].strip()
+    if person != tmp[0]:
+        log(str=f'{fName}: Spaces in person {tmp}',logLevel=LOG_WARNING)
+        return []
+    ret.append(person)
+    if (lTmp == 1):
+        ret.append('') # no image name
+        ret.append('0')
+        ret.append(0)
+        return ret
+    title = tmp[1].strip()
+    if title != tmp[1]:
+        log(str=f'{fName}: Spaces in name {tmp}',logLevel=LOG_WARNING)
+        return []
+    ret.append(title)
+    year = '0'
+    if (lTmp == 3): # There is year in file name
+        year = tmp[2].strip()
+        if year != tmp[2]:
+            log(str=f'{fName}: Spaces in year {tmp}', logLevel=LOG_ERROR)
+            return []
+    ret.append(year)
+    intYear = getYear(rawYear=year)
+    if (intYear == None):
+        log(str=f'{fName}: Cannot get int year: "{tmp}"', logLevel=LOG_ERROR)
+        return []
+    ret.append(intYear)
+    return ret
+
 # Get all images in directory
 def adjustImages(dry_run = False) -> None:
     TMP_IMAGE_DIR = IMAGE_DIR
@@ -167,8 +213,7 @@ def adjustImageName(file, dry_run = False) -> bool:
         log(str=f'{fName}: Renaming {file} to {file2}')
         if (not dry_run):
             rename(src=file, dst=file2)
-        pass
-
+    return file2
 
  # Adjust image size
  # If bigger side is larget than 500px than shorten it to 500px and adjust smaller one accordingly

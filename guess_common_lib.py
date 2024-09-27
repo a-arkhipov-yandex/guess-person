@@ -8,6 +8,7 @@ import csv
 from log_lib import *
 
 EXT = '.JPG'
+LOCAL_EXT = ".jpg"
 
 PERSONS_FILE_CVS = 'persons.csv'
 ENV_DBHOST = 'DBHOST'
@@ -187,15 +188,27 @@ def myInt(str):
 # Build image name from parts
 def buildImgName(person, name, year) -> str:
     yearTxt = ''
-    if (year != '0'):
+    if (str(year) != '0'):
         yearTxt = f' - {year}'
-    url = f'{person} - {name}{yearTxt}{EXT}'
+    imageName = f'{person} - {name}{yearTxt}'
+    return imageName
+
+# Build image file name from parts
+def buildImgLocalFileName(person, name, year) -> str:
+    imageName = buildImgName(person=person,name=name,year=year)
+    url = f'{imageName}{LOCAL_EXT}'
+    return url
+
+# Build image file name from parts
+def buildImgS3FileName(person, name, year) -> str:
+    imageName = buildImgName(person=person,name=name,year=year)
+    url = f'{imageName}{EXT}'
     return url
 
 # Build URL to image
 def buildImgUrl(base_url:str, person, imageName, year) -> str:
     space = '%20'
-    url1 = base_url + buildImgName(person=person, name=imageName, year=year)
+    url1 = base_url + buildImgS3FileName(person=person, name=imageName, year=year)
     url = url1.replace(' ', space)
     return url
 
@@ -234,3 +247,9 @@ def getYear(rawYear):
         log(f'Year is out of range: {rawYear}',LOG_ERROR)
         retYear = 0
     return retYear 
+
+def adjustText(text:str) -> str:
+    text = text.replace('ё','е') # Replace 'ё'ё
+    text = text.replace('ё','е') # Replace 'ё' another ё
+    text = text.replace('й','й') # Replace 'й'
+    return text

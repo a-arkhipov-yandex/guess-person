@@ -1371,6 +1371,25 @@ class Connection:
             ret = creatorInfo
         return ret
 
+    # Get max number of person images (1 if no number images)
+    def getLastPersonImageNumber(personId) -> int:
+        maxNum = 0
+        # Get all person images
+        images = Connection.getAllImagesOfPerson(personId=personId)
+        if (dbFound(result=images)):
+            intImages = []
+            for imageInfo in images:
+                imageName = imageInfo['name']
+                try:
+                    intName = int(imageName)
+                    intImages.append(intName)
+                except:
+                    pass # Do nothing here
+            # Return max number
+            if (intImages):
+                maxNum = max(intImages)
+        return maxNum
+
     # Check if person exists in DB
     # Returns:
     #    None if connection is not initialized or error during query

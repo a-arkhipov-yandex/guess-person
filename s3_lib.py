@@ -68,7 +68,7 @@ def bulkUpload(persons, names, years) -> None:
 
     for i in range(0, len(persons)):
         # Check is img is in bucket
-        imgName = buildImgName(person=persons[i], name=names[i], year=years[i])
+        imgName = buildImgS3FileName(person=persons[i], name=names[i], year=years[i])
         if (not checkImgInBucket(imgName=imgName, imgsInBucket=imgsInBucket)):
             # upload image to bucket
             log(str=f"Uploading {imgName}")

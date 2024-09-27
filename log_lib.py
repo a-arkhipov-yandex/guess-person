@@ -1,4 +1,3 @@
-
 from os import path
 from os import getenv
 from dotenv import load_dotenv
@@ -46,12 +45,12 @@ class Log:
         if (not logFile):
             logFile = DEFAULT_LOGSTARTFILE
         try:
-            f = open(logFile, 'w+')
+            f = open(file=logFile, mode='w+')
             tzinfo=ZoneInfo('Europe/Moscow')
-            startTime = dt.now(tzinfo).strftime("%d-%m-%Y %H:%M:%S")
+            startTime = dt.now(tz=tzinfo).strftime("%d-%m-%Y %H:%M:%S")
             f.write(f'{startTime}: GuessPerson_bot started'+"\n")
         except Exception as error:
-            log(f'Cannot open "{logFile}": {error}', LOG_ERROR)
+            log(str=f'Cannot open "{logFile}": {error}', logLevel=LOG_ERROR)
         f.close()
 
 def initLog(logFile=None, printToo=False):

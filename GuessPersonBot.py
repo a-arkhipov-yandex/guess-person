@@ -1,15 +1,20 @@
 from os import getenv
 from dotenv import load_dotenv
 import telebot
+import telegram
 from telebot import types
 import re
 import requests
+from threading import Thread
 from log_lib import *
 from db_lib import *
 from game_lib import *
+from img_fs_lib import *
 
 ENV_BOTTOKEN = 'BOTTOKEN'
 ENV_BOTTOKENTEST = 'BOTTOKENTEST'
+
+ENV_BOTSAVEIMAGEPATH = 'BOTSAVEIMAGEPATH'
 
 ENV_TESTDB = 'TESTDB'
 ENV_TESTBOT = 'TESTBOT'
@@ -61,6 +66,69 @@ def getBotToken(test):
         token = getenv(key=ENV_BOTTOKENTEST)
     return token
 
+def getBotImagePath() -> str:
+    load_dotenv()
+    imagePath = getenv(key=ENV_BOTSAVEIMAGEPATH)
+    if (not imagePath):
+        imagePath = DEFAILT_SAVE_IMAGE_DIR
+    return imagePath
+
+def threadPhotoHandle(bot:telebot.TeleBot, telegramid, file_info:telegram.File, text) -> bool:
+    fName = threadPhotoHandle.__name__
+    log(str=f'{fName}: Photo handling thread is started')
+    downloaded_file = bot.download_file(file_path=file_info.file_path)
+    text = adjustText(text=text)
+    info = parsePersonAndImage2(info=text)
+    if (not info):
+        log(str=f'{fName}: Cannot parst person and image data from "{text}"',logLevel=LOG_ERROR)
+        return False
+    personName = info[0]
+    imageName = info[1]
+    year = info[2]
+    intYear = info[3]
+    # Check if such image is already in DB
+    personId = Connection.getPersonIdByName(person=personName)
+    createPerson = False
+    if (dbFound(result=personId)):
+        # If no imageName - find last number for person
+        if (not imageName or imageName == '#'):
+            maxNum = Connection.getLastPersonImageNumber(personId=personId)
+            imageName = str(maxNum+1)
+        imageId = Connection.getImageIdByPersonId(personId=personId, imageName=imageName, intYear=intYear)
+        if (dbFound(result=imageId)):
+            errorMsg = f'Image does already exist: {personName} - {imageName} - {year}'
+            bot.send_message(chat_id=telegramid, text=errorMsg)
+            log(str=f'{fName}:{errorMsg}')
+            return False
+    else: # New person
+        createPerson = True
+        # If no imageName - make it 1
+        if (not imageName or imageName == '#'):
+            imageName = '1'
+
+    imageFileName = buildImgLocalFileName(person=personName, name=imageName, year=year)
+    imageFilePath = getBotImagePath() + imageFileName
+    with open(file=imageFilePath, mode='wb') as new_file:
+        new_file.write(downloaded_file)
+    log(str=f'{fName}: Saved file - {imageFilePath}')
+    # Handle file
+    adjustImageSize(file=imageFilePath)
+    log(str=f'{fName}: Image size adjusted: {imageFilePath}')
+    imageFileNameNoExtension = buildImgName(person=personName,name=imageName,year=year)
+    bot.send_message(chat_id=telegramid, text=f'Image file saved: {imageFileNameNoExtension}')
+    # TODO: Save to S3
+
+    # TODO: Create new person
+    if (createPerson):
+        #bot.send_message(chat_id=telegramid, text=f'Creating new person {personName}')
+        pass
+
+    # TODO: Create image
+
+    #bot.send_message(chat_id=telegramid, text=f'Creating new image {imageFullName}')
+
+    return True
+
 #=====================
 # Bot class
 #---------------------
@@ -68,7 +136,8 @@ class GuessPersonBot:
     __bot = None
 
     def registerHandlers(self) -> None:
-        GuessPersonBot.__bot.register_message_handler(callback=self.messageHandler)
+        GuessPersonBot.__bot.register_message_handler(callback=self.messageHandler, content_types=['message'])
+        GuessPersonBot.__bot.register_message_handler(callback=self.photoHandler, content_types=['photo'])
         GuessPersonBot.__bot.register_callback_query_handler(
             callback=self.complexityHandler,
             func=lambda message: re.match(pattern=fr'^{CALLBACK_COMPLEXITY_TAG}\d+$', string=message.data)
@@ -144,6 +213,28 @@ class GuessPersonBot:
                 break
             except requests.exceptions.ReadTimeout as error:
                 log(str=f'startBot: exception: {error}', logLevel=LOG_ERROR)
+
+    # Message handler
+    def photoHandler(self, message:types.Message) -> None:
+        fName = self.messageHandler.__name__
+        username = message.from_user.username
+        telegramid = message.from_user.id
+        if (not GuessPersonBot.isInitialized()):
+            log(str=f'{fName}: Bot is not initialized - cannot start', logLevel=LOG_ERROR)
+            return
+        # Check user
+        if (username != 'alex_arkhipov'):
+            log(str=f'{fName}: User {username} tries to use photo', logLevel=LOG_ERROR)
+            self.sendMessage(telegramid=telegramid, text='Я вас не понимаю:()')
+            return
+        log(str=f'{fName}: Got photo message')
+        # Start thread to handle file
+        fileID = message.photo[-1].file_id
+        file_info = self.bot.get_file(file_id=fileID)
+        text = message.caption
+        thread = Thread(target=threadPhotoHandle, args=[self.bot, telegramid, file_info, text])
+        thread.start()
+        log(str=f'{fName}: Started thread to handle photo')
 
     # Message handler
     def messageHandler(self, message:types.Message) -> None:
