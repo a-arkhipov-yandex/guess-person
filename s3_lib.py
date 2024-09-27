@@ -4,7 +4,6 @@ from img_fs_lib import *
 from guess_common_lib import *
 
 S3BUCKET = 's3://guess-person'
-EXT = '.JPG'
 
 # Build cmd to upload image to S3
 def buildUploadCmd(imgName) -> str:

@@ -10,6 +10,7 @@ from log_lib import *
 from db_lib import *
 from game_lib import *
 from img_fs_lib import *
+from s3_lib import *
 
 ENV_BOTTOKEN = 'BOTTOKEN'
 ENV_BOTTOKENTEST = 'BOTTOKENTEST'
@@ -50,15 +51,6 @@ def isTestBot() -> bool:
             ret = False
     return ret
 
-def isTestDB() -> bool:
-    load_dotenv()
-    ret = True
-    testdb = getenv(key=ENV_TESTDB)
-    if (testdb):
-        if (testdb == "False"):
-            ret = False
-    return ret    
-
 def getBotToken(test):
     load_dotenv()
     token = getenv(key=ENV_BOTTOKEN)
@@ -80,18 +72,18 @@ def threadPhotoHandle(bot:telebot.TeleBot, telegramid, file_info:telegram.File, 
     text = adjustText(text=text)
     info = parsePersonAndImage2(info=text)
     if (not info):
-        log(str=f'{fName}: Cannot parst person and image data from "{text}"',logLevel=LOG_ERROR)
+        log(str=f'{fName}: Cannot parse person and image data from "{text}"',logLevel=LOG_ERROR)
         return False
     personName = info[0]
     imageName = info[1]
     year = info[2]
     intYear = info[3]
-    # Check if such image is already in DB
+    # Check if such person and image is already in DB
     personId = Connection.getPersonIdByName(person=personName)
     createPerson = False
     if (dbFound(result=personId)):
         # If no imageName - find last number for person
-        if (not imageName or imageName == '#'):
+        if (not imageName or imageName == '#' or imageName == '№'):
             maxNum = Connection.getLastPersonImageNumber(personId=personId)
             imageName = str(maxNum+1)
         imageId = Connection.getImageIdByPersonId(personId=personId, imageName=imageName, intYear=intYear)
@@ -102,31 +94,49 @@ def threadPhotoHandle(bot:telebot.TeleBot, telegramid, file_info:telegram.File, 
             return False
     else: # New person
         createPerson = True
-        # If no imageName - make it 1
-        if (not imageName or imageName == '#'):
+        # If no person - make imageHame 1 if not set
+        if (not imageName or imageName == '#' or imageName == '№'):
             imageName = '1'
-
     imageFileName = buildImgLocalFileName(person=personName, name=imageName, year=year)
     imageFilePath = getBotImagePath() + imageFileName
+    imageFileNameNoExtension = buildImgName(person=personName,name=imageName,year=year)
+    # Check that file doesn't exist
+    if (path.exists(path=imageFilePath)):
+        errorMsg = f'Duplicate file found. Cannot proceed.Image file saved: {imageFileNameNoExtension}'
+        log(str=f'{fName}: {errorMsg}',logLevel=LOG_WARNING)
     with open(file=imageFilePath, mode='wb') as new_file:
         new_file.write(downloaded_file)
     log(str=f'{fName}: Saved file - {imageFilePath}')
     # Handle file
     adjustImageSize(file=imageFilePath)
     log(str=f'{fName}: Image size adjusted: {imageFilePath}')
-    imageFileNameNoExtension = buildImgName(person=personName,name=imageName,year=year)
-    bot.send_message(chat_id=telegramid, text=f'Image file saved: {imageFileNameNoExtension}')
-    # TODO: Save to S3
-
-    # TODO: Create new person
+    messageToUser = f'Image file saved: {imageFileNameNoExtension}'
+    # Save to S3
+    imageS3FileName = buildImgS3FileName(person=personName, name=imageName, year=year)
+    ret = uploadImg(imgName=imageS3FileName)
+    if (ret != 0):
+        errorMsg = f'Cannot upload image to S3 {imageFileName}. Returned: {ret}'
+        log(str=f'{fName}:{errorMsg}', logLevel=LOG_ERROR)
+        bot.send_message(chat_id=telegramid, text=f'Cannot upload file to S3: {imageFileNameNoExtension}')
+        return False
+    # Create new person
     if (createPerson):
-        #bot.send_message(chat_id=telegramid, text=f'Creating new person {personName}')
-        pass
-
-    # TODO: Create image
-
-    #bot.send_message(chat_id=telegramid, text=f'Creating new image {imageFullName}')
-
+        personId = Connection.insertPerson(personName=personName)
+        if (not personId):
+            errorMsg = f'Cannot create person {personName}'
+            log(str=f'{fName}:{errorMsg}', logLevel=LOG_ERROR)
+            bot.send_message(chat_id=telegramid, text=errorMsg)
+            return False
+        messageToUser = messageToUser + "\n" f'New person created {personName}'
+    # Create image
+    imageId = Connection.insertImage(personId=personId,imageName=imageName,year=year,intYear=intYear)
+    if (not imageId):
+        errorMsg = f'Cannot create image {imageFileNameNoExtension}'
+        log(str=f'{fName}:{errorMsg}', logLevel=LOG_ERROR)
+        bot.send_message(chat_id=telegramid, text=errorMsg)
+        return False
+    messageToUser = messageToUser + "\n" + f'New image created {imageFileNameNoExtension}'
+    bot.send_message(chat_id=telegramid, text=messageToUser)
     return True
 
 #=====================
@@ -137,7 +147,8 @@ class GuessPersonBot:
 
     def registerHandlers(self) -> None:
         GuessPersonBot.__bot.register_message_handler(callback=self.messageHandler, content_types=['message'])
-        GuessPersonBot.__bot.register_message_handler(callback=self.photoHandler, content_types=['photo'])
+        if (isTestBot()): # Handle images for test bot only
+            GuessPersonBot.__bot.register_message_handler(callback=self.photoHandler, content_types=['photo'])
         GuessPersonBot.__bot.register_callback_query_handler(
             callback=self.complexityHandler,
             func=lambda message: re.match(pattern=fr'^{CALLBACK_COMPLEXITY_TAG}\d+$', string=message.data)

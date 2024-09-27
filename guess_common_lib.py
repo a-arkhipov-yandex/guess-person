@@ -40,7 +40,7 @@ def getStrDistance(str1, str2) -> int:
 def isTestBot() -> bool:
     load_dotenv()
     ret = True
-    testbot = getenv(ENV_TESTBOT)
+    testbot = getenv(key=ENV_TESTBOT)
     if (testbot):
         if (testbot == "False"):
             ret = False
@@ -49,7 +49,7 @@ def isTestBot() -> bool:
 def isTestDB() -> bool:
     load_dotenv()
     ret = True
-    testdb = getenv(ENV_TESTDB)
+    testdb = getenv(key=ENV_TESTDB)
     if (testdb):
         if (testdb == "False"):
             ret = False
@@ -57,19 +57,19 @@ def isTestDB() -> bool:
 
 def getBotToken(test):
     load_dotenv()
-    token = getenv(ENV_BOTTOKEN)
+    token = getenv(key=ENV_BOTTOKEN)
     if (test):
-        token = getenv(ENV_BOTTOKENTEST)
+        token = getenv(key=ENV_BOTTOKENTEST)
     return token
 
 def getDBbConnectionData():
     load_dotenv()
     data={}
-    data['dbhost']=getenv(ENV_DBHOST)
-    data['dbport']=getenv(ENV_DBPORT)
-    data['dbname']=getenv(ENV_DBNAME)
-    data['dbuser']=getenv(ENV_DBUSER)
-    data['dbtoken']=getenv(ENV_DBTOKEN)
+    data['dbhost']=getenv(key=ENV_DBHOST)
+    data['dbport']=getenv(key=ENV_DBPORT)
+    data['dbname']=getenv(key=ENV_DBNAME)
+    data['dbuser']=getenv(key=ENV_DBUSER)
+    data['dbtoken']=getenv(key=ENV_DBTOKEN)
     for v in data.values():
         if (v == None): # Something wrong
             return None
