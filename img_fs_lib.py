@@ -156,6 +156,8 @@ def parsePersonAndImage(info) -> list:
 
 def parsePersonAndImage2(info) -> list:
     fName = parsePersonAndImage2.__name__
+    if (not info):
+        return []
     ret = []
     tmp = info.split(" - ")
     lTmp = len(tmp)

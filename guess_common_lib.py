@@ -229,26 +229,28 @@ def getYear(rawYear):
         # Check that this is real year
         retYear = myInt(year)
         if not retYear:
-            log(f'Problem with int conversion - {year}',LOG_ERROR)
+            log(str=f'Problem with int conversion - {year}',logLevel=LOG_ERROR)
             return False
     elif (lYear == 9):
         years = year.split('-')
         if (len(years) != 2):
-            log(f'Cannot split years - {year}',LOG_ERROR)
+            log(str=f'Cannot split years - {year}',logLevel=LOG_ERROR)
             return False
         year1 = myInt(years[0])
         year2 = myInt(years[1])
         if ((not year1) or (not year2)):
-            log(f'Problem with int conversion 2 - {year}',LOG_ERROR)
+            log(str=f'Problem with int conversion 2 - {year}',logLevel=LOG_ERROR)
             return False
         retYear = int((year2+year1)/2) # return average
     
     if ((retYear < 1000) or (retYear > 2030)):
-        log(f'Year is out of range: {rawYear}',LOG_ERROR)
+        log(str=f'Year is out of range: {rawYear}',logLevel=LOG_ERROR)
         retYear = 0
     return retYear 
 
 def adjustText(text:str) -> str:
+    if (not text):
+        return text
     text = text.replace('ё','е') # Replace 'ё'ё
     text = text.replace('ё','е') # Replace 'ё' another ё
     text = text.replace('й','й') # Replace 'й'

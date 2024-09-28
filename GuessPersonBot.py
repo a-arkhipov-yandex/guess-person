@@ -73,6 +73,7 @@ def threadPhotoHandle(bot:telebot.TeleBot, telegramid, file_info:telegram.File, 
     info = parsePersonAndImage2(info=text)
     if (not info):
         log(str=f'{fName}: Cannot parse person and image data from "{text}"',logLevel=LOG_ERROR)
+        bot.send_message(chat_id=telegramid, text='Неверный формат подписи')
         return False
     personName = info[0]
     imageName = info[1]
@@ -146,7 +147,7 @@ class GuessPersonBot:
     __bot = None
 
     def registerHandlers(self) -> None:
-        GuessPersonBot.__bot.register_message_handler(callback=self.messageHandler, content_types=['message'])
+        GuessPersonBot.__bot.register_message_handler(callback=self.messageHandler, content_types=['text'])
         if (isTestBot()): # Handle images for test bot only
             GuessPersonBot.__bot.register_message_handler(callback=self.photoHandler, content_types=['photo'])
         GuessPersonBot.__bot.register_callback_query_handler(
@@ -306,6 +307,10 @@ class GuessPersonBot:
             ret = GuessPersonBot.__bot.send_message(chat_id=telegramid, text=text)
             return ret.message_id
         return None
+
+    # /start cmd handler
+    def cmdStartHandler(self, message: types.Message) -> None:
+        self.startNewGame(telegramid=message.from_user.id)
 
     # /settings cmd handler
     def cmdSettingsHandler(self, message: types.Message) -> None:
