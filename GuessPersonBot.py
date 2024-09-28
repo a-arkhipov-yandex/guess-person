@@ -236,7 +236,7 @@ class GuessPersonBot:
         # Check user
         if (username != 'alex_arkhipov'):
             log(str=f'{fName}: User {username} tries to use photo', logLevel=LOG_ERROR)
-            self.sendMessage(telegramid=telegramid, text='Я вас не понимаю:()')
+            self.sendMessage(telegramid=telegramid, text='Я вас не понимаю:(\n')
             return
         log(str=f'{fName}: Got photo message')
         # Start thread to handle file
@@ -265,7 +265,7 @@ class GuessPersonBot:
                 text = message.text
                 return self.answerHandlerType3(telegramid=telegramid, text=text)
         help = self.getHelpMessage(username=username)
-        self.sendMessage(telegramid=telegramid, text=f"Я вас не понимаю:(/n{help}")
+        self.sendMessage(telegramid=telegramid, text=f"Я вас не понимаю:(\n{help}")
 
     # Check is user registered
     def checkUser(self, telegramid) -> bool:
