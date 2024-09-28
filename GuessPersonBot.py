@@ -193,9 +193,9 @@ class GuessPersonBot:
         if (not botToken):
             log(str=f'Cannot read ENV vars: botToken={botToken}', logLevel=LOG_ERROR)
             return False
-        log(str=f'Bot initialized successfully (test={isTest})')
         GuessPersonBot.__bot = telebot.TeleBot(token=botToken)
         self.registerHandlers()
+        log(str=f'Bot initialized successfully (test={isTest})')
         return True
 
     def isInitialized() -> bool:
