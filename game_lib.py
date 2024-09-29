@@ -48,13 +48,13 @@ class guess_game:
         game_complexity = queryParams.get('complexity')
         game_speciality = queryParams.get('speciality')
         if (not Connection.dbLibCheckGameType(game_type=game_type)):
-            print(f'{fName}: game type is incorect ({game_type})',LOG_ERROR)
+            log(str=f'{fName}: game type is incorect ({game_type})',logLevel=LOG_ERROR)
             return None
         if (not Connection.dbLibCheckGameComplexity(game_complexity=game_complexity)):
-            print(f'{fName}: game complexity is incorect ({game_complexity})',LOG_ERROR)
+            log(str=f'{fName}: game complexity is incorect ({game_complexity})',logLevel=LOG_ERROR)
             return None
         if (not Connection.dbLibCheckGameSpeciality(game_speciality=game_speciality)):
-            print(f'{fName}: game speciality is incorect ({game_speciality})',LOG_ERROR)
+            log(str=f'{fName}: game speciality is incorect ({game_speciality})',logLevel=LOG_ERROR)
             return None
         game_type = int(game_type)
         if (game_type == 1):
@@ -64,7 +64,7 @@ class guess_game:
         elif (game_type == 3):
             ret = guess_game.generateNewGame3(queryParams=queryParams)
         else:
-            print(f'{fName}: Unknown game type {game_type}',LOG_ERROR)
+            log(str=f'{fName}: Unknown game type {game_type}',logLevel=LOG_ERROR)
         return ret
 
     # Extract game type 1 question options
@@ -121,19 +121,19 @@ class guess_game:
        # Get random creator
         ret = Connection.getRandomPersonIds(complexity=complexity,speciality=speciality)
         if (ret == None):
-            print(f'{fName}: Cannot get random person: DB issue', LOG_ERROR)
+            log(str=f'{fName}: Cannot get random person: DB issue', logLevel=LOG_ERROR)
             return None
         elif (dbNotFound(result=ret)):
-            print(f'{fName}: Cannot get random person: person not found',LOG_ERROR)
+            log(str=f'{fName}: Cannot get random person: person not found',logLevel=LOG_ERROR)
             return None  
         personId = ret[0]
         # Get random image of the creator
         ret = Connection.getRandomImageIdsOfPerson(personId=personId)
         if (ret == None):
-            print(f'{fName}: Cannot get random image of person {personId}: DB issue',LOG_ERROR)
+            log(str=f'{fName}: Cannot get random image of person {personId}: DB issue',logLevel=LOG_ERROR)
             return None
         elif (dbNotFound(result=ret)):
-            print(f'{fName}: Cannot get random image of person {personId}: image not found',LOG_ERROR)
+            log(str=f'{fName}: Cannot get random image of person {personId}: image not found',logLevel=LOG_ERROR)
             return None
         imageId = ret[0]
         return (personId, imageId)
@@ -146,7 +146,7 @@ class guess_game:
         fName = guess_game.generateNewGame1.__name__
         complexity = queryParams.get('complexity')
         if (not complexity):
-            print(f'{fName}: Cannot get complexity: {queryParams}',LOG_ERROR)
+            log(str=f'{fName}: Cannot get complexity: {queryParams}',logLevel=LOG_ERROR)
             return None
         if (not complexity):
             complexity = DEFAULT_GAMECOMPLEXITY
@@ -172,12 +172,12 @@ class guess_game:
             range=yearRange,
             speciality=speciality)
         if (dbNotFound(result=otherImageIds) or len(otherImageIds) != guess_game.GAME2NUMBEROFOPTIONS):
-            print(f'{fName}: Cannot get random {guess_game.GAME2NUMBEROFOPTIONS} images of creator other than {personId}',LOG_ERROR)
+            log(str=f'{fName}: Cannot get random {guess_game.GAME2NUMBEROFOPTIONS} images of creator other than {personId}',logLevel=LOG_ERROR)
             return None
         telegramid = queryParams['telegramid']
         userId = Connection.getUserIdByTelegramid(telegramid=telegramid)
         if (userId == None or dbNotFound(result=userId)):
-            print(f'{fName}: Cannot get user id by telegramid {telegramid}',LOG_ERROR)
+            log(str=f'{fName}: Cannot get user id by telegramid {telegramid}',logLevel=LOG_ERROR)
             return None
         gameType = queryParams['type']
         questionIds = []
@@ -193,7 +193,7 @@ class guess_game:
             question=question, complexity=complexity
         )
         if (ret == None):
-            print(f'{fName}: Cannot insert game u={telegramid},gt={gameType},q={question},ca={imageId}',LOG_ERROR)
+            log(str=f'{fName}: Cannot insert game u={telegramid},gt={gameType},q={question},ca={imageId}',logLevel=LOG_ERROR)
             return None
         else:
             # Set current_game
@@ -209,11 +209,11 @@ class guess_game:
         telegramid = queryParams['telegramid']
         userId = Connection.getUserIdByTelegramid(telegramid=telegramid)
         if (userId == None or dbNotFound(result=userId)):
-            print(f'{fName}: Cannot get user id by telegramid {telegramid}', LOG_ERROR)
+            log(str=f'{fName}: Cannot get user id by telegramid {telegramid}', logLevel=LOG_ERROR)
             return None
         # Check game type
         if (gameType != 2 and gameType != 3):
-            print(f'{fName}: Incorrect game type provided: {gameType}',LOG_ERROR)
+            log(str=f'{fName}: Incorrect game type provided: {gameType}',logLevel=LOG_ERROR)
             return None
         complexity = queryParams['complexity']
         if (not complexity):
@@ -228,7 +228,7 @@ class guess_game:
         # Get image info
         imageInfo = Connection.getImageInfoById(imageId=imageId)
         if (dbNotFound(result=imageInfo)):
-            print(f'{fName}: Cannot get random image info (image id = {imageId})',LOG_ERROR)
+            log(str=f'{fName}: Cannot get random image info (image id = {imageId})',logLevel=LOG_ERROR)
             return None
         gameType = queryParams['type']
         # Generate game with user, type(2-3), question(image id), correct_answer (creator_id), complexity
@@ -237,7 +237,7 @@ class guess_game:
             question=imageId,complexity=complexity
         )
         if (newGameId == None):
-            print(f'{fName}: Cannot insert game u={telegramid},gt={gameType},q={imageId},ca={personId}',LOG_ERROR)
+            log(str=f'{fName}: Cannot insert game u={telegramid},gt={gameType},q={imageId},ca={personId}',logLevel=LOG_ERROR)
             return None
         else:
             # Set current_game
@@ -270,7 +270,7 @@ class guess_game:
             if (dbFound(result=imageInfo)):
                 textQ = f"\U00002753 Чье это изображение?"
         else: # wrong type
-            log(f'{fName}: Unkown game type provided: {gameType}',LOG_WARNING)
+            log(str=f'{fName}: Unkown game type provided: {gameType}',logLevel=LOG_WARNING)
         return textQ
 
     # Finish game

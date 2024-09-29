@@ -39,7 +39,7 @@ def getStrDistance(str1, str2) -> int:
 
 def isTestBot() -> bool:
     load_dotenv()
-    ret = True
+    ret = True # By default
     testbot = getenv(key=ENV_TESTBOT)
     if (testbot):
         if (testbot == "False"):
@@ -48,18 +48,20 @@ def isTestBot() -> bool:
 
 def isTestDB() -> bool:
     load_dotenv()
-    ret = True
+    ret = True # By default
     testdb = getenv(key=ENV_TESTDB)
     if (testdb):
         if (testdb == "False"):
             ret = False
     return ret    
 
-def getBotToken(test):
+def getBotToken():
     load_dotenv()
-    token = getenv(key=ENV_BOTTOKEN)
+    test = isTestBot()
     if (test):
         token = getenv(key=ENV_BOTTOKENTEST)
+    else:
+        token = getenv(key=ENV_BOTTOKEN)
     return token
 
 def getDBbConnectionData():
@@ -218,8 +220,12 @@ def buildImgUrl(base_url:str, person, imageName, year) -> str:
 #   False - error parsing year
 #   0 - year is too small or too big
 def getYear(rawYear):
+    fName = getYear.__name__
     retYear = 0
-    year = removeYearSigns(rawYear)
+    if (rawYear == '0'):
+        return 0
+
+    year = removeYearSigns(rawYear=rawYear)
     if (year == None):
         return False
     if year[-1] == 'е':
@@ -227,24 +233,24 @@ def getYear(rawYear):
     lYear = len(year)
     if (lYear == 4):
         # Check that this is real year
-        retYear = myInt(year)
+        retYear = myInt(str=year)
         if not retYear:
-            log(str=f'Problem with int conversion - {year}',logLevel=LOG_ERROR)
+            log(str=f'{fName}: Problem with int conversion - {year}',logLevel=LOG_ERROR)
             return False
     elif (lYear == 9):
         years = year.split('-')
         if (len(years) != 2):
-            log(str=f'Cannot split years - {year}',logLevel=LOG_ERROR)
+            log(str=f'{fName}: Cannot split years - {year}',logLevel=LOG_ERROR)
             return False
-        year1 = myInt(years[0])
-        year2 = myInt(years[1])
+        year1 = myInt(str=years[0])
+        year2 = myInt(str=years[1])
         if ((not year1) or (not year2)):
-            log(str=f'Problem with int conversion 2 - {year}',logLevel=LOG_ERROR)
+            log(str=f'{fName}: Problem with int conversion 2 - {year}',logLevel=LOG_ERROR)
             return False
         retYear = int((year2+year1)/2) # return average
     
     if ((retYear < 1000) or (retYear > 2030)):
-        log(str=f'Year is out of range: {rawYear}',logLevel=LOG_ERROR)
+        log(str=f'{fName}: Year is out of range: {rawYear} - {retYear}',logLevel=LOG_ERROR)
         retYear = 0
     return retYear 
 

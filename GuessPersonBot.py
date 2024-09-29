@@ -11,6 +11,7 @@ from db_lib import *
 from game_lib import *
 from img_fs_lib import *
 from s3_lib import *
+from guess_common_lib import *
 
 ENV_BOTTOKEN = 'BOTTOKEN'
 ENV_BOTTOKENTEST = 'BOTTOKENTEST'
@@ -42,27 +43,12 @@ PERSONS_IN_TYPE2_ANSWER = 5
 #============================
 # Common functions
 #----------------------------
-def isTestBot() -> bool:
-    load_dotenv()
-    ret = True
-    testbot = getenv(key=ENV_TESTBOT)
-    if (testbot):
-        if (testbot == "False"):
-            ret = False
-    return ret
-
-def getBotToken(test):
-    load_dotenv()
-    token = getenv(key=ENV_BOTTOKEN)
-    if (test):
-        token = getenv(key=ENV_BOTTOKENTEST)
-    return token
 
 def getBotImagePath() -> str:
     load_dotenv()
     imagePath = getenv(key=ENV_BOTSAVEIMAGEPATH)
     if (not imagePath):
-        imagePath = DEFAILT_SAVE_IMAGE_DIR
+        imagePath = DEFAULT_SAVE_IMAGE_DIR
     return imagePath
 
 def threadPhotoHandle(bot:telebot.TeleBot, telegramid, file_info:telegram.File, text) -> bool:
@@ -189,13 +175,13 @@ class GuessPersonBot:
             log(str=f'Bot is already initialized', logLevel=LOG_WARNING)
             return False
         # Initialize bot first time
-        isTest = isTestBot()
-        botToken = getBotToken(test=isTest)
+        botToken = getBotToken()
         if (not botToken):
             log(str=f'Cannot read ENV vars: botToken={botToken}', logLevel=LOG_ERROR)
             return False
         GuessPersonBot.__bot = telebot.TeleBot(token=botToken)
         self.registerHandlers()
+        isTest = isTestBot()
         log(str=f'Bot initialized successfully (test={isTest})')
         return True
 
@@ -244,7 +230,7 @@ class GuessPersonBot:
         fileID = message.photo[-1].file_id
         file_info = self.bot.get_file(file_id=fileID)
         text = message.caption
-        thread = Thread(target=threadPhotoHandle, args=[self.bot, telegramid, file_info, text])
+        thread = Thread(target=threadPhotoHandle, args=[self.getBot(), telegramid, file_info, text])
         thread.start()
         log(str=f'{fName}: Started thread to handle photo')
 
@@ -302,7 +288,7 @@ class GuessPersonBot:
 
     # Send message to user
     # Returns: Message ID or None in case of error
-    def sendMessage(self, telegramid, text):
+    def sendMessage(self, telegramid, text) -> int | None:
         if (GuessPersonBot.isInitialized()):
             ret = GuessPersonBot.__bot.send_message(chat_id=telegramid, text=text)
             return ret.message_id

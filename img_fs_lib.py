@@ -7,9 +7,7 @@ from guess_common_lib import *
 #IMAGE_DIR = "/Users/a-arkhipov/Yandex.Disk.localized/Images/Личности/"
 IMAGE_DIR = "/Users/a-arkhipov/Downloads/Личности/"
 
-DEFAILT_SAVE_IMAGE_DIR = "/Users/a-arkhipov/Downloads/SavedBotImages/"
-
-MAX_FILESIZE_KB = 256
+DEFAULT_SAVE_IMAGE_DIR = "/Users/a-arkhipov/Downloads/SavedBotImages/"
 
 # Build image full path name
 def buildImgPathName(imgName:str) -> str:
@@ -28,61 +26,9 @@ def removeYearSigns(rawYear):
         year = rawYear[:-2]
     else:
         return None
-
     if year[0:3] == 'ок ':
         year = year[3:]
-
-    return year
-
-# Transofrm str to int
-# Returns:
-#   int i - if correct it
-#   False - if cannot transform
-def myInt(str):
-    try:
-        iYear = int(str)
-    except:
-        return False
-    return iYear
-
-# Get year (possible nearly)
-# Returns:
-#   int year - int year
-#   False - error parsing year
-#   0 - year is too small or too big
-def getYear(rawYear):
-    fName = getYear.__name__
-    retYear = 0
-    if (rawYear == '0'):
-        return 0
-    year = removeYearSigns(rawYear=rawYear)
-    if (year == None):
-        return None
-    if year[-1] == 'е':
-        year = year[0:-1]
-    lYear = len(year)
-    if (lYear == 4):
-        # Check that this is real year
-        retYear = myInt(str=year)
-        if not retYear:
-            log(str=f'{fName}: Problem with int conversion - {year}',logLevel=LOG_ERROR)
-            return None
-    elif (lYear == 9):
-        years = year.split('-')
-        if (len(years) != 2):
-            log(str=f'{fName}: Cannot split years - {year}',logLevel=LOG_ERROR)
-            return None
-        year1 = myInt(str=years[0])
-        year2 = myInt(str=years[1])
-        if ((not year1) or (not year2)):
-            log(str=f'{fName}: Problem with int conversion 2 - {year}',logLevel=LOG_ERROR)
-            return None
-        retYear = int((year2+year1)/2) # return average
-    
-    if ((retYear < 1000) or (retYear > 2030)):
-        log(str=f'{fName}: Year is out of range: {rawYear}',logLevel=LOG_ERROR)
-        retYear = None
-    return retYear 
+    return year 
 
 # Get all images in directory
 def getImgs():
@@ -222,7 +168,7 @@ def adjustImageName(file, dry_run = False) -> bool:
 def adjustImageSize(file, dry_run = False) -> bool:
     fName = adjustImageSize.__name__
     MAXSIZE = 500
-    img = Image.open(file)
+    img = Image.open(fp=file)
     wid, hgt = img.size
     maxSide = max(wid, hgt)
     minSide = min(wid,hgt)
@@ -239,7 +185,7 @@ def adjustImageSize(file, dry_run = False) -> bool:
             newHgt = newMax
 
         newSize = (newWid,newHgt)
-        img2 = img.resize(newSize, Image.HAMMING)
+        img2 = img.resize(size=newSize, resample=Image.HAMMING)
         if (not dry_run):
             try:
                 img2.save(file)
@@ -255,6 +201,6 @@ def adjustImageSize(file, dry_run = False) -> bool:
         pass
     return ret
 
-def getFilesInImageDir() -> list[str]:
-    files = listdir(path=IMAGE_DIR)
+def getFilesInImageDir(path = IMAGE_DIR) -> list[str]:
+    files = listdir(path=path)
     return files

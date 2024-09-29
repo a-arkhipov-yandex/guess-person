@@ -46,14 +46,14 @@ class Log:
             logFile = DEFAULT_LOGSTARTFILE
         try:
             f = open(file=logFile, mode='w+')
-            tzinfo=ZoneInfo('Europe/Moscow')
+            tzinfo=ZoneInfo(key='Europe/Moscow')
             startTime = dt.now(tz=tzinfo).strftime("%d-%m-%Y %H:%M:%S")
             f.write(f'{startTime}: GuessPerson_bot started'+"\n")
         except Exception as error:
             log(str=f'Cannot open "{logFile}": {error}', logLevel=LOG_ERROR)
         f.close()
 
-def initLog(logFile=None, printToo=False):
+def initLog(logFile=None, printToo=False) -> None:
     load_dotenv()
     if (not logFile):
         # Read logFile from env
@@ -72,19 +72,19 @@ def initLog(logFile=None, printToo=False):
     printTooEnv = getenv(ENV_PRINTTOO)
     if (printTooEnv and printTooEnv == 'True'):
         printToo = True
-    Log.logFileRotation(logFile)
+    Log.logFileRotation(logFile=logFile)
     # Open log file for writing
     try:
-        f = open(logFile, 'w')
+        f = open(file=logFile, mode='w')
         Log.logHandle = f
     except Exception as error:
-        log(f'Cannot open "{logFile}": {error}', LOG_ERROR)
+        log(str=f'Cannot open "{logFile}": {error}', logLevel=LOG_ERROR)
     if (printToo == True):
         Log.printToo = printToo
     Log.logStart()
-    log(f'Log initialization complete: log file={Log.logFileName} | log level={Log.logCurrentLevel}')
+    log(str=f'Log initialization complete: log file={Log.logFileName} | log level={Log.logCurrentLevel}')
 
-def log(str, logLevel=LOG_INFO):
+def log(str, logLevel=LOG_INFO) -> None:
     # Check log level first
     if (LOG_LEVELS[logLevel] > LOG_LEVELS[Log.logCurrentLevel]):
         return # Do not print
@@ -92,8 +92,8 @@ def log(str, logLevel=LOG_INFO):
         print(str)
     else:
         # Get date and time
-        tzinfo=ZoneInfo('Europe/Moscow')
-        time = dt.now(tzinfo).strftime("%d-%m-%Y %H:%M:%S")
+        tzinfo=ZoneInfo(key='Europe/Moscow')
+        time = dt.now(tz=tzinfo).strftime("%d-%m-%Y %H:%M:%S")
         logStr = f'[{time}]:{logLevel}:{str}'
         Log.logHandle.write(logStr+"\n")
         Log.logHandle.flush()
@@ -101,7 +101,7 @@ def log(str, logLevel=LOG_INFO):
         if (Log.printToo == True):
             print(logStr)
 
-def closeLog():
+def closeLog() -> None:
     if (Log.logHandle):
-        log(f'Closing log')
+        log(str=f'Closing log')
         Log.logHandle.close()
