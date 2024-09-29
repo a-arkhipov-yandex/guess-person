@@ -1,4 +1,4 @@
-from os import system, path
+from os import system
 from subprocess import run, STDOUT, PIPE
 from img_fs_lib import *
 from guess_common_lib import *
@@ -24,7 +24,7 @@ def uploadImg(imgName) -> int:
         log(str=f'{fName}: Error uploading image: cmd={cmd} | ret={ret}',logLevel=LOG_ERROR)
     return ret
 
-# Upload image to Bucket
+# Delete image from Bucket
 def deleteImg(imgName) -> int:
     fName = deleteImg.__name__
     cmd = buildDeleteCmd(imgName=imgName)
@@ -39,7 +39,7 @@ def getImgsInBucket():
     # программе/команде или она не будет работать
     cmd = 's3cmd ls ' + S3BUCKET
     # перенаправляем `stdout` и `stderr` в переменную `output`
-    res = run(cmd.split(), stdout=PIPE, text=True)
+    res = run(args=cmd.split(), stdout=PIPE, text=True)
     output = res.stdout
     arrOutput = output.split("\n")
 
