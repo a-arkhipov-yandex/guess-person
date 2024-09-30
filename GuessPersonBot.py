@@ -316,15 +316,16 @@ class GuessPersonBot:
         return ret + f'''
     Команды GuessPerson_Bot:
         {CMD_HELP} - вывести помощь по командам (это сообщение)
-        {CMD_START} - регистрация нового пользователя
+        {CMD_START} - регистрация нового пользователя/новая игра
         {CMD_SETTINGS} - выбрать уровень сложности и тип игры
         '''
     # Get welcome message
     def getWelcomeMessage(self, username) -> str:
-        if (username == None):
-            username = ''
+        usernameMessage = ''
+        if (username != None):
+            usernameMessage = ', {username}'
         ret = f'''
-        Добро пожаловать, {username}!
+        Добро пожаловать{usernameMessage}!
         Это игра "Guess Person". Версия: {VERSION}
         '''
         return ret
