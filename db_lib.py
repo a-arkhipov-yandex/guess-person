@@ -1,3 +1,5 @@
+from time import sleep
+from threading import Thread
 import psycopg2
 from log_lib import *
 from guess_common_lib import *
@@ -208,20 +210,23 @@ class Connection:
     __complexities = []
     __specialities = []
     __imageTypes = []
+    __thread = None
+    loopFlag = True
     BASE_URL_KEY = 'IMAGE_URL'
 
     # Init connection - returns True/False
     def initConnection(test=False) -> bool:
         ret = False
         if (not Connection.__isInitialized):
-            Connection.__connection = Connection.__newConnection(test=test)
-            if (Connection.isInitialized()):
+            Connection.__newConnection(test=test)
+            if (Connection.isActive()):
                 # Cache section
                 Connection.__baseImageUrl = Connection.getSettingValue(key=Connection.BASE_URL_KEY)
                 Connection.__gameTypes = Connection.getGameTypesFromDb()
                 Connection.__complexities = Connection.getComplexitiesFromDb()
                 Connection.__imageTypes = Connection.getImageTypesFromDb()
                 Connection.__specialities = Connection.getSpecialitiesFromDb()
+                Connection.__test = test
                 log(str=f"DB Connection created (test={test})", logLevel=LOG_DEBUG)
                 ret = True
             else:
@@ -231,28 +236,32 @@ class Connection:
         return ret
     
     def getConnection():
-        if (not Connection.isInitialized()):
-            return None
         return Connection.__connection
     
-    def closeConnection():
-        if (Connection.__isInitialized):
-            Connection.__connection.close()
+    def closeConnection() -> None:
+        if (Connection.isActive()):
+            Connection.pingStop()
             Connection.__isInitialized = False
+            Connection.__connection.close()
             log(str=f"DB Connection closed")
+        else:
+            log(str=f"DB Connection already closed",logLevel=LOG_WARNING)
 
-    def __newConnection(test=False):
-        conn = None
+    def __newConnection(test=False) -> bool:
+        # Check if connection is open
+        if (Connection.isActive()):
+            log(str=f"Closing connection to DB",logLevel=LOG_WARNING)
+            Connection.closeConnection()
+        ret = False
+        if (test):
+            data = getDBbTestConnectionData()
+        else: # Production
+            data = getDBbConnectionData()
+        if (data == None):
+            log(str=f'Cannot get env data. Exiting.',logLevel=LOG_ERROR)
+            return False
         try:
-            if (test):
-                data = getDBbTestConnectionData()
-            else: # Production
-                data = getDBbConnectionData()
-            if (data == None):
-                log(str=f'Cannot get env data. Exiting.',logLevel=LOG_ERROR)
-                return
-
-            conn = psycopg2.connect(f"""
+            Connection.__connection = psycopg2.connect(dsn=f"""
                 host={data['dbhost']}
                 port={data['dbport']}
                 sslmode=verify-full
@@ -261,21 +270,32 @@ class Connection:
                 password={data['dbtoken']}
                 target_session_attrs=read-write
             """)
-            conn.autocommit = True
+            Connection.__connection.autocommit = True
             Connection.__isInitialized = True
+            Connection.startPingTask()
+            ret = True
             log(str=f'DB Connetion established')
         except (Exception, psycopg2.DatabaseError) as error:
             log(str=f"Cannot connect to database: {error}",logLevel=LOG_ERROR)
-            conn = None
-        
-        return conn
+        return ret
 
     def isInitialized() -> bool:
         return Connection.__isInitialized
 
+    def isActive() -> bool:
+        return Connection.__isInitialized and Connection.getConnection().closed == 0
+
     def getBaseImageUrl():
         return Connection.__baseImageUrl
 
+    def reconnect() -> bool:
+        # check if connection was initialized before
+        if (not Connection.isInitialized()):
+            log(str='Connection was not initialized. Cannot reconnect.', logLevel=LOG_ERROR)
+            return False
+        if (not Connection.isActive()):
+            Connection.pingStop()
+            return Connection.__newConnection(test=Connection.__test)
 
     # Execute query with params
     # If 'all' == True - execute fetchAll()/ otherwise fetchOne()
@@ -284,8 +304,8 @@ class Connection:
     #   NOT_FOUND - if nothing found
     #   [result] - array with one/many found item(s)
     def executeQuery(query, params={}, all=False):
-        if (not Connection.isInitialized()):
-            log(str=f'Cannot execute query "{query}" with "{params}" (all={all}): connection is not initialized', logLevel=LOG_ERROR)
+        if (not Connection.isActive() and not Connection.reconnect()):
+            log(str=f'Cannot execute query "{query}" with "{params}" (all={all}): connection is not ready', logLevel=LOG_ERROR)
             return None
         ret = NOT_FOUND
         conn = Connection.getConnection()
@@ -388,15 +408,15 @@ class Connection:
     def getImageUrlById(imageId):
         fName = Connection.getImageUrlById.__name__
         if (not Connection.isInitialized()):
-            log(f"{fName}: Cannot get image url by id - connection is not initialized",LOG_ERROR)
+            log(str=f"{fName}: Cannot get image url by id - connection is not initialized",logLevel=LOG_ERROR)
             return None
         image = Connection.getImageInfoById(imageId=imageId)
         if (image == None):
-            log(f'{fName}: Cannot get image URL for image {imageId}: DB issue',LOG_ERROR)
+            log(str=f'{fName}: Cannot get image URL for image {imageId}: DB issue',logLevel=LOG_ERROR)
             return None
         elif (dbNotFound(result=image)):
-            log(f'{fName}: Cannot get image URL for image {imageId}: no such image in DB',LOG_ERROR)
-            return Connection.NOT_FOUND
+            log(str=f'{fName}: Cannot get image URL for image {imageId}: no such image in DB',logLevel=LOG_ERROR)
+            return NOT_FOUND
         baseUrl = Connection.getBaseImageUrl()
         url = None
         if (baseUrl):
@@ -551,7 +571,7 @@ class Connection:
     def getUserIdByTelegramid(telegramid):
         ret = dbLibCheckTelegramid(telegramid=telegramid)
         if (not ret):
-            return Connection.NOT_FOUND
+            return NOT_FOUND
         query = f"SELECT id FROM users WHERE telegramid = %(tid)s"
         ret = Connection.executeQuery(query=query,params={'tid':telegramid})
         if (dbFound(result=ret)):
@@ -560,19 +580,20 @@ class Connection:
 
     # Delete user - returns True/False
     def deleteUser(userId) -> bool:
+        fName = Connection.deleteUser.__name__
         ret = False
-        if (not Connection.isInitialized()):
-            log(str="Cannot delete user - connection is not initialized",logLevel=LOG_ERROR)
+        if (not Connection.isActive() and not Connection.reconnect()):
+            log(str=f"{fName}: Cannot delete user - connection is not initialized",logLevel=LOG_ERROR)
             return ret
         conn = Connection.getConnection()
         with conn.cursor() as cur:
             query = "DELETE from users where id = %(user)s"
             try:
                 cur.execute(query=query, vars={'user':userId})
-                log(str=f'Deleted user: {userId}')
+                log(str=f'{fName}: Deleted user: {userId}')
                 ret = True
             except (Exception, psycopg2.DatabaseError) as error:
-                log(str=f'Failed delete user {userId}: {error}',logLevel=LOG_ERROR)
+                log(str=f'{fName}: Failed delete user {userId}: {error}',logLevel=LOG_ERROR)
         return ret
     
     # Insert new user in DB. 
@@ -581,20 +602,18 @@ class Connection:
     #      None - if any error
     def insertUser(telegramid, gameType=None, complexity=None):
         fName = Connection.insertUser.__name__
-        if (not Connection.isInitialized()):
-            log(str=f"{fName}: Cannot insert user - connection is not initialized",logLevel=LOG_ERROR)
-            return None
         ret = dbLibCheckTelegramid(telegramid=telegramid)
         if (not ret):
             log(str=f"{fName}: Cannot insert user -  invalid telegramid format: {telegramid}",logLevel=LOG_ERROR)
             return None
         if ((complexity == None) or (not Connection.dbLibCheckGameComplexity(game_complexity=complexity))):
             complexity = Connection.getDefaultComplexity()
-
         if ((gameType == None) or (not Connection.dbLibCheckGameType(game_type=gameType))):
             gameType = Connection.getDefaultGameType()
-
         ret = None
+        if (not Connection.isActive() and not Connection.reconnect()):
+            log(str=f"{fName}: Cannot insert user - connection is not initialized",logLevel=LOG_ERROR)
+            return ret
         conn = Connection.getConnection()
         # Check for duplicates
         retUser = Connection.getUserIdByTelegramid(telegramid=telegramid)
@@ -670,9 +689,6 @@ class Connection:
     # Returns: True - update successful / False - otherwise
     def updateUserGameType(telegramid, gameType) -> bool:
         fName = Connection.updateUserGameType.__name__
-        if (not Connection.isInitialized()):
-            log(str=f"{fName}: connection is not initialized",logLevel=LOG_ERROR)
-            return False
         ret = dbLibCheckTelegramid(telegramid=telegramid)
         if (not ret):
             log(str=f'{fName}: Incorrect user {telegramid} provided',logLevel=LOG_ERROR)
@@ -686,15 +702,18 @@ class Connection:
             return False
 
         ret = False
+        if (not Connection.isActive() and not Connection.reconnect()):
+            log(str=f"{fName}: Connection is not initialized",logLevel=LOG_ERROR)
+            return ret
         conn = Connection.getConnection()
         with conn.cursor() as cur:
             query = 'update users set game_type=%(gt)s where id = %(uId)s'
             try:
                 cur.execute(query=query,vars={'gt':gameType,'uId':userId})
-                log(str=f'Updated game type: (user={telegramid} | gameType = {gameType})')
+                log(str=f'{fName}: Updated game type: (user={telegramid} | gameType = {gameType})')
                 ret = True
             except (Exception, psycopg2.DatabaseError) as error:
-                log(str=f'Failed update game type (gameType = {gameType}, user={telegramid}): {error}',logLevel=LOG_ERROR)
+                log(str=f'{fName}: Failed update game type (gameType = {gameType}, user={telegramid}): {error}',logLevel=LOG_ERROR)
         return ret
 
     # Get user complexity
@@ -704,9 +723,6 @@ class Connection:
     def getUserComplexity(telegramid):
         fName = Connection.getUserComplexity.__name__
         ret = None
-        if (not Connection.isInitialized()):
-            log(str=f"{fName}: connection is not initialized",logLevel=LOG_ERROR)
-            return ret
         ret2 = dbLibCheckTelegramid(telegramid=telegramid)
         if (not ret2):
             log(str=f'{fName}: Incorrect user {telegramid} provided',logLevel=LOG_ERROR)
@@ -725,9 +741,6 @@ class Connection:
     # Returns: True - update successful / False - otherwise
     def updateUserComplexity(telegramid, complexity) -> bool:
         fName = Connection.updateUserComplexity.__name__
-        if (not Connection.isInitialized()):
-            log(str=f"{fName}: connection is not initialized",logLevel=LOG_ERROR)
-            return False
         ret = dbLibCheckTelegramid(telegramid=telegramid)
         if (not ret):
             log(str=f'{fName}: Incorrect user {telegramid} provided',logLevel=LOG_ERROR)
@@ -739,8 +752,10 @@ class Connection:
         if (not Connection.dbLibCheckGameComplexity(game_complexity=complexity)):
             log(str=f'{fName}: Wrong complexity format: {complexity}',logLevel=LOG_ERROR)
             return False
-
         ret = False
+        if (not Connection.isActive() and not Connection.reconnect()):
+            log(str=f"{fName}: connection is not initialized",logLevel=LOG_ERROR)
+            return ret
         conn = Connection.getConnection()
         with conn.cursor() as cur:
             query = 'update users set game_complexity=%(c)s where id = %(uId)s'
@@ -759,9 +774,6 @@ class Connection:
     def getUserSpeciality(telegramid):
         fName = Connection.getUserSpeciality.__name__
         ret = None
-        if (not Connection.isInitialized()):
-            log(str=f"{fName}: connection is not initialized",logLevel=LOG_ERROR)
-            return ret
         ret2 = dbLibCheckTelegramid(telegramid=telegramid)
         if (not ret2):
             log(str=f'{fName}: Incorrect user {telegramid} provided',logLevel=LOG_ERROR)
@@ -780,9 +792,6 @@ class Connection:
     # Returns: True - update successful / False - otherwise
     def updateUserSpeciality(telegramid, speciality) -> bool:
         fName = Connection.updateUserSpeciality.__name__
-        if (not Connection.isInitialized()):
-            log(str=f"{fName}: connection is not initialized",logLevel=LOG_ERROR)
-            return False
         ret = dbLibCheckTelegramid(telegramid=telegramid)
         if (not ret):
             log(str=f'{fName}: Incorrect user {telegramid} provided',logLevel=LOG_ERROR)
@@ -794,14 +803,16 @@ class Connection:
         if (not Connection.dbLibCheckGameSpeciality(game_speciality=speciality)):
             log(str=f'{fName}: Wrong speciality format: {speciality}',logLevel=LOG_ERROR)
             return False
-
         ret = False
+        if (not Connection.isActive() and not Connection.reconnect()):
+            log(str=f"{fName}: Connection is not initialized",logLevel=LOG_ERROR)
+            return ret
         conn = Connection.getConnection()
         with conn.cursor() as cur:
             query = 'update users set game_speciality=%(s)s where id = %(uId)s'
             try:
                 cur.execute(query=query,vars={'s':speciality,'uId':userId})
-                log(str=f'Updated speciality: (user={telegramid} | speciality = {speciality})')
+                log(str=f'{fName}: Updated speciality: (user={telegramid} | speciality = {speciality})')
                 ret = True
             except (Exception, psycopg2.DatabaseError) as error:
                 log(str=f'{fName}: Failed update speciality (speciality = {speciality}, user={telegramid}): {error}',logLevel=LOG_ERROR)
@@ -851,9 +862,6 @@ class Connection:
     # Returns: True - update successful / False - otherwise
     def updateCurrentGameData(telegramid, gameData) -> bool:
         fName = Connection.updateCurrentGameData.__name__
-        if (not Connection.isInitialized()):
-            log(str=f"{fName}: connection is not initialized",logLevel=LOG_ERROR)
-            return False
         ret = dbLibCheckTelegramid(telegramid=telegramid)
         if (not ret):
             log(str=f'{fName}: Incorrect user {telegramid} provided',logLevel=LOG_ERROR)
@@ -863,12 +871,15 @@ class Connection:
             log(str=f'{fName}: Cannot find user {telegramid}',logLevel=LOG_ERROR)
             return False
         ret = False
+        if (not Connection.isActive() and not Connection.reconnect()):
+            log(str=f"{fName}: connection is not initialized",logLevel=LOG_ERROR)
+            return ret
         conn = Connection.getConnection()
         with conn.cursor() as cur:
             query = 'update users set game_data=%(gd)s where id = %(uId)s'
             try:
                 cur.execute(query=query,vars={'gd':gameData,'uId':userId})
-                log(str=f'Updated current game data: (user={telegramid} | gameData = {gameData})')
+                log(str=f'{fName}: Updated current game data: (user={telegramid} | gameData = {gameData})')
                 ret = True
             except (Exception, psycopg2.DatabaseError) as error:
                 log(str=f'{fName}: Failed update current game data (gameData = {gameData}, user={telegramid}): {error}',logLevel=LOG_ERROR)
@@ -884,9 +895,6 @@ class Connection:
     # Returns: True - update successful / False - otherwise
     def updateCurrentGame(telegramid, gameId) -> bool:
         fName = Connection.updateCurrentGame.__name__
-        if (not Connection.isInitialized()):
-            log(str=f"{fName}: connection is not initialized",logLevel=LOG_ERROR)
-            return False
         ret = dbLibCheckTelegramid(telegramid=telegramid)
         if (not ret):
             log(str=f'{fName}: Incorrect user {telegramid} provided',logLevel=LOG_ERROR)
@@ -910,12 +918,15 @@ class Connection:
                 log(str=f'{fName}: cannot set finished game as current (gameId = {gameId}, user={telegramid})',logLevel=LOG_ERROR)
                 return False
         ret = False
+        if (not Connection.isActive() and not Connection.reconnect()):
+            log(str=f"{fName}: connection is not initialized",logLevel=LOG_ERROR)
+            return ret
         conn = Connection.getConnection()
         with conn.cursor() as cur:
             query = 'update users set current_game=%(gId)s where id = %(uId)s'
             try:
                 cur.execute(query=query,vars={'gId':gameId,'uId':userId})
-                log(str=f'Updated current game: (user={telegramid} | gameId = {gameId})')
+                log(str=f'{fName}: Updated current game: (user={telegramid} | gameId = {gameId})')
                 ret = True
             except (Exception, psycopg2.DatabaseError) as error:
                 log(str=f'{fName}: Failed update current game (gameId = {gameId}, user={telegramid}): {error}',logLevel=LOG_ERROR)
@@ -926,19 +937,20 @@ class Connection:
     #--------------------
     # Delete image - returns True/False
     def deleteImage(imageId) -> bool:
+        fName = Connection.deleteImage.__name__
         ret = False
-        if (not Connection.isInitialized()):
-            log(str="Cannot delete image - connection is not initialized",logLevel=LOG_ERROR)
+        if (not Connection.isActive() and not Connection.reconnect()):
+            log(str=f"{fName}: Cannot delete image - connection is not initialized",logLevel=LOG_ERROR)
             return ret
         conn = Connection.getConnection()
         with conn.cursor() as cur:
             query = "DELETE from images where id = %(id)s"
             try:
                 cur.execute(query=query, vars={'id':imageId})
-                log(str=f'Deleted image: {imageId}')
+                log(str=f'{fName}: Deleted image: {imageId}')
                 ret = True
             except (Exception, psycopg2.DatabaseError) as error:
-                log(str=f'Failed delete image {imageId}: {error}',logLevel=LOG_ERROR)
+                log(str=f'{fName}: Failed delete image {imageId}: {error}',logLevel=LOG_ERROR)
         return ret
     
     # Insert image in DB
@@ -947,9 +959,6 @@ class Connection:
     #   None - if error
     def insertImage(personId, imageName, year, intYear, imageType=None):
         fName = Connection.insertImage.__name__
-        if (not Connection.isInitialized()):
-            log(str=f"{fName}: Cannot insert image - connection is not initialized",logLevel=LOG_ERROR)
-            return None
         # Check input
         try:
             int(intYear)
@@ -967,10 +976,13 @@ class Connection:
         # Check for duplicates
         imageIdDup = Connection.getImageIdByPersonId(personId=personId, imageName=imageName, intYear=intYear)
         if (imageIdDup == None):
-            log(str=f'Cannot insert image {personId} - {imageName} - {year}: DB issue',logLevel=LOG_ERROR)
+            log(str=f'{fName}: Cannot insert image {personId} - {imageName} - {year}: DB issue',logLevel=LOG_ERROR)
             return None
         ret = None
         if (dbNotFound(result=imageIdDup)):
+            if (not Connection.isActive() and not Connection.reconnect()):
+                log(str=f"{fName}: Cannot insert image - connection is not initialized",logLevel=LOG_ERROR)
+                return None
             conn = Connection.getConnection()
             with conn.cursor() as cur:
                 query = f'''
@@ -984,11 +996,11 @@ class Connection:
                         ret = row[0]
                         log(str=f'Inserted image: {personId} - {imageName} - {year}')
                     else:
-                        log(str=f'Cannot get id of new image: {query}',logLevel=LOG_ERROR)
+                        log(str=f'{fName}: Cannot get id of new image: {query}',logLevel=LOG_ERROR)
                 except (Exception, psycopg2.DatabaseError) as error:
-                    log(str=f'Failed insert image {personId} - {imageName} - {year}: {error}',logLevel=LOG_ERROR)
+                    log(str=f'{fName}: Failed insert image {personId} - {imageName} - {year}: {error}',logLevel=LOG_ERROR)
         else:
-            log(str=f'Trying to insert duplicate image: {personId} - {imageName} - {year}',logLevel=LOG_WARNING)
+            log(str=f'{fName}: Trying to insert duplicate image: {personId} - {imageName} - {year}',logLevel=LOG_WARNING)
             ret = None
         return ret
     
@@ -999,7 +1011,7 @@ class Connection:
     #    NOT_FOUND - if not found
     def getImageIdByPersonId(personId, imageName, intYear):
         query = "SELECT id FROM images WHERE person =%(cId)s AND name =%(image)s AND year = %(year)s"
-        ret = Connection.executeQuery(query,{'cId':personId,'image':imageName,'year':intYear})
+        ret = Connection.executeQuery(query=query,params={'cId':personId,'image':imageName,'year':intYear})
         if (dbFound(result=ret)):
             ret = ret[0]
         return ret
@@ -1027,9 +1039,6 @@ class Connection:
     #   None - in case of error
     def getAllImages(personName=False):
         fName = Connection.getAllImages.__name__
-        if (not Connection.isInitialized()):
-            log(str=f"{fName}: Cannot get all images - connection is not initialized",logLevel=LOG_ERROR)
-            return None
         images = []
         query = f"""select i.id, i.person, i.year, i.name
                     from images as i
@@ -1060,9 +1069,6 @@ class Connection:
     #   None - in case of error
     def getAllImagesOfPerson(personId):
         fName = Connection.getAllImagesOfPerson.__name__
-        if (not Connection.isInitialized()):
-            log(str=f"{fName}: Cannot get all images of person {personId} - connection is not initialized",logLevel=LOG_ERROR)
-            return None
         images = []
         query = f"""select i.id, i.person, p.name, i.image_type, i.year, i.year_str, i.name,p.gender
                     from images as i join persons as p on i.person = p.id where p.id = %(id)s
@@ -1082,19 +1088,20 @@ class Connection:
     #-----------------------
     # Delete game - returns true/false
     def deleteGame(gameId) -> bool:
+        fName = Connection.deleteGame.__name__
         ret = False
-        if (not Connection.isInitialized()):
-            log(str="Cannot delete game - connection is not initialized",logLevel=LOG_ERROR)
+        if (not Connection.isActive() and not Connection.reconnect()):
+            log(str=f"{fName}: Cannot delete game - connection is not initialized",logLevel=LOG_ERROR)
             return ret
         conn = Connection.getConnection()
         with conn.cursor() as cur:
             query = "DELETE from games where id = %(id)s"
             try:
                 cur.execute(query=query, vars={'id':gameId})
-                log(str=f'Deleted game: {gameId}')
+                log(str=f'{fName}: Deleted game: {gameId}')
                 ret = True
             except (Exception, psycopg2.DatabaseError) as error:
-                log(str=f'Failed delete game {gameId}: {error}',logLevel=LOG_ERROR)
+                log(str=f'{fName}: Failed delete game {gameId}: {error}',logLevel=LOG_ERROR)
         return ret
     
     # Insert new user in DB
@@ -1102,6 +1109,7 @@ class Connection:
     #   id - id of new game
     #   None - otherwise
     def insertGame(userId, game_type, correct_answer, question, complexity):
+        fName = Connection.insertGame.__name__
         # Checks first
         if (not dbLibCheckUserId(userId=userId)):
             return None
@@ -1110,9 +1118,12 @@ class Connection:
         if (not Connection.dbLibCheckGameComplexity(game_complexity=complexity)):
             return None
         if (not Connection.isInitialized()):
-            log(str=f"Cannot insert game for user {userId}- connection is not initialized",logLevel=LOG_ERROR)
+            log(str=f"{fName}: Cannot insert game for user {userId}- connection is not initialized",logLevel=LOG_ERROR)
             return None
         ret = None
+        if (not Connection.isActive() and not Connection.reconnect()):
+            log(str=f"{fName}: Cannot delete game - connection is not initialized",logLevel=LOG_ERROR)
+            return ret
         conn = Connection.getConnection()
         with conn.cursor() as cur:
             query = 'INSERT INTO games (userid,game_type,correct_answer,question,created,complexity) VALUES ( %(u)s, %(t)s, %(ca)s, %(q)s, NOW(), %(com)s) returning id'
@@ -1123,9 +1134,9 @@ class Connection:
                     ret = row[0]
                     log(str=f'Inserted game: {ret}')
                 else:
-                    log(str=f'Cannot get id of new game: {query}',logLevel=LOG_ERROR)
+                    log(str=f'{fName}: Cannot get id of new game: {query}',logLevel=LOG_ERROR)
             except (Exception, psycopg2.DatabaseError) as error:
-                log(str=f'Failed insert game for user {userId}: {error}',logLevel=LOG_ERROR)
+                log(str=f'{fName}: Failed insert game for user {userId}: {error}',logLevel=LOG_ERROR)
         return ret
 
     # Get game by id
@@ -1150,9 +1161,6 @@ class Connection:
     #   True - successful finish
     def finishGame(gameId, answer) -> bool:
         fName = Connection.finishGame.__name__
-        if (not Connection.isInitialized()):
-            log(str=f"{fName}: Cannot finish game - connection is not initialized",logLevel=LOG_ERROR)
-            return False
         gameInfo = Connection.getGameInfoById(gameId=gameId)
         if (gameInfo == None):
             log(str=f'{fName}: cannot get game {gameId}: DB issue',logLevel=LOG_ERROR)
@@ -1170,6 +1178,9 @@ class Connection:
             dbResult = 'false'
             if (answer == correct_answer):
                 dbResult = 'true'
+            if (not Connection.isActive() and not Connection.reconnect()):
+                log(str=f"{fName}: Cannot finish game - connection is not initialized",logLevel=LOG_ERROR)
+                return False
             conn = Connection.getConnection()
             with conn.cursor() as cur:
                 query = 'update games set finished = NOW(), result=%(r)s, user_answer=%(a)s where id = %(id)s'
@@ -1310,7 +1321,7 @@ class Connection:
     #    NOT_FOUND - not found person
     def getPersonIdByName(person):
         fName = Connection.getPersonIdByName.__name__
-        if (not Connection.isInitialized()):
+        if (not Connection.isActive() and not Connection.reconnect()):
             log(str=f"{fName}: Cannot get person id - connection is not initialized",logLevel=LOG_ERROR)
             return None
         query = "SELECT id FROM persons WHERE name =%(p)s"
@@ -1325,10 +1336,10 @@ class Connection:
     #   personId - id of new person
     def insertPerson(personName:str):
         fName = Connection.insertPerson.__name__
-        if (not Connection.isInitialized()):
-            log(str=f"{fName}: Cannot insert person - connection is not initialized",logLevel=LOG_ERROR)
-            return None
         ret = None
+        if (not Connection.isActive() and not Connection.reconnect()):
+            log(str=f"{fName}: Cannot insert person - connection is not initialized",logLevel=LOG_ERROR)
+            return ret
         # Check for duplicates
         retPerson = Connection.getPersonIdByName(person=personName)
         if (retPerson == None): # error with DB
@@ -1347,9 +1358,9 @@ class Connection:
                     else:
                         log(str=f'{fName}: Cannot get id of new person: {query}',logLevel=LOG_ERROR)
                 except (Exception, psycopg2.DatabaseError) as error:
-                    log(str=f'Failed insert person {personName}: {error}',logLevel=LOG_ERROR)
+                    log(str=f'{fName}: Failed insert person {personName}: {error}',logLevel=LOG_ERROR)
         else:
-            log(str=f'Trying to insert duplicate person: {personName}',logLevel=LOG_WARNING)
+            log(str=f'{fName}: Trying to insert duplicate person: {personName}',logLevel=LOG_WARNING)
         return ret
 
     # Returns:
@@ -1522,6 +1533,9 @@ class Connection:
         if (not personInfo['speciality']):
             personInfo['speciality'] = None
         spec = personInfo['speciality']
+        if (not Connection.isActive() and not Connection.reconnect()):
+            log(str=f'{fName}: Failed to reconnect',logLevel=LOG_ERROR)
+            return False
         conn = Connection.getConnection()
         with conn.cursor() as cur:
             query = '''
@@ -1545,7 +1559,7 @@ class Connection:
     # Delete person - returns true/false
     def deletePerson(personId) -> bool:
         ret = False
-        if (not Connection.isInitialized()):
+        if (not Connection.isActive() and not Connection.reconnect()):
             log(str="Cannot delete person - connection is not initialized",logLevel=LOG_ERROR)
             return ret
         # Check existance
@@ -1737,3 +1751,29 @@ class Connection:
                 person = dbGetPersonInfo(queryResult=p)
                 persons.append(person)
         return persons
+
+    def startPingTask() -> None:
+        Connection.loopFlag = True
+        Connection.__thread = Thread(target=Connection.dbPingTask)
+        Connection.__thread.start()
+
+    def pingStop() -> None:
+        Connection.loopFlag = False
+        if (not Connection.__thread):
+            log(str='Ping thread is not active', logLevel=LOG_WARNING)
+        Connection.__thread.join()
+        Connection.__thread = None
+
+    def dbPingTask() -> None:
+        SLEEP_INTERVAL = 5
+        fName = Connection.dbPingTask.__name__
+        log(str=f'{fName}: thread started')
+        # infinite loop
+        while(Connection.loopFlag):
+            if (not Connection.isActive()):
+                log(str=f'{fName}: Database is not active, reconnecting')
+                if (not Connection.reconnect()):
+                    log(str=f'{fName}: Cannot reconnect to database', logLevel=LOG_WARNING)
+            sleep(SLEEP_INTERVAL)
+
+        log(str=f'{fName}: thread stopped')
