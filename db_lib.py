@@ -1770,7 +1770,10 @@ class Connection:
         log(str=f'{fName}: thread started')
         # infinite loop
         while(Connection.loopFlag):
-            if (not Connection.isActive()):
+            # Make simple select to check if DB is active
+            query = 'select id from users limit 1'
+            res = Connection.executeQuery(query=query,params={},all=False)
+            if (res is None):
                 log(str=f'{fName}: Database is not active, reconnecting')
                 if (not Connection.reconnect()):
                     log(str=f'{fName}: Cannot reconnect to database', logLevel=LOG_WARNING)
