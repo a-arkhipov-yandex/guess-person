@@ -322,8 +322,8 @@ class GuessPersonBot:
     # Get welcome message
     def getWelcomeMessage(self, username) -> str:
         usernameMessage = ''
-        if (username != None):
-            usernameMessage = ', {username}'
+        if (username is not None):
+            usernameMessage = f', {username}'
         ret = f'''
         Добро пожаловать{usernameMessage}!
         Это игра "Guess Person". Версия: {VERSION}
@@ -930,7 +930,7 @@ class GuessPersonBot:
         fName = self.checkGameTypeNInProgress.__name__
         userName = telegramid
         if (not self.checkUser(telegramid=telegramid)):
-            log(f'{fName}: Unknown user {telegramid} provided',LOG_ERROR)
+            log(str=f'{fName}: Unknown user {telegramid} provided',logLevel=LOG_ERROR)
             self.sendMessage(telegramid=telegramid, text=DEFAULT_ERROR_MESSAGE)
             return
         ret = Connection.getCurrentGame(telegramid=userName)

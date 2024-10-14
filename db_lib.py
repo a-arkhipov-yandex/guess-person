@@ -1117,12 +1117,9 @@ class Connection:
             return None
         if (not Connection.dbLibCheckGameComplexity(game_complexity=complexity)):
             return None
-        if (not Connection.isInitialized()):
-            log(str=f"{fName}: Cannot insert game for user {userId}- connection is not initialized",logLevel=LOG_ERROR)
-            return None
         ret = None
         if (not Connection.isActive() and not Connection.reconnect()):
-            log(str=f"{fName}: Cannot delete game - connection is not initialized",logLevel=LOG_ERROR)
+            log(str=f"{fName}: Cannot insert game - connection is not initialized",logLevel=LOG_ERROR)
             return ret
         conn = Connection.getConnection()
         with conn.cursor() as cur:
