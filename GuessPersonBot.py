@@ -327,6 +327,7 @@ class GuessPersonBot:
         ret = f'''
         Добро пожаловать{usernameMessage}!
         Это игра "Guess Person". Версия: {VERSION}
+        Автор: @alex_arkhipov
         '''
         return ret
 
