@@ -570,6 +570,7 @@ class Connection:
     #   NOT_FOUND - no such user
     def getUserIdByTelegramid(telegramid):
         ret = dbLibCheckTelegramid(telegramid=telegramid)
+        telegramid = str(telegramid)
         if (not ret):
             return NOT_FOUND
         query = f"SELECT id FROM users WHERE telegramid = %(tid)s"
@@ -614,6 +615,7 @@ class Connection:
         if (not Connection.isActive() and not Connection.reconnect()):
             log(str=f"{fName}: Cannot insert user - connection is not initialized",logLevel=LOG_ERROR)
             return ret
+        telegramid = str(telegramid)
         conn = Connection.getConnection()
         # Check for duplicates
         retUser = Connection.getUserIdByTelegramid(telegramid=telegramid)
