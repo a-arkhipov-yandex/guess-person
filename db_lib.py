@@ -1760,8 +1760,9 @@ class Connection:
         Connection.loopFlag = False
         if (not Connection.__thread):
             log(str='Ping thread is not active', logLevel=LOG_WARNING)
-        Connection.__thread.join()
-        Connection.__thread = None
+        else:
+            Connection.__thread.join()
+            Connection.__thread = None
 
     def dbPingTask() -> None:
         SLEEP_INTERVAL = 5
